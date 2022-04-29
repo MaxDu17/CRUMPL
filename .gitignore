@@ -1,0 +1,9 @@
+venv
+.DS_Store
+.idea
+__pycache__
+
+data/*
+!data/README.md
+
+*.blend1
