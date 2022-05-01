@@ -40,7 +40,7 @@ class ConvAE(nn.Module):
     def __init__(self, input_dim,
                  enc_config=[("conv1", 16), ("pool1", None), ("flatten1", None), ("linear1", 4096)],
                  verbose=False, disable_decoder=False, n_cuda_devices=8, store_activations=False,
-                 states_file=None, num_instruments = 5, style_hidden_size = 32, num_style_interferences = 3):
+                 states_file=None):
         """
         @params:
             ae_skip_layers: Specifies number of layers to skip from the bottom of encoder and top of decoder.
@@ -52,19 +52,16 @@ class ConvAE(nn.Module):
         self.n_cuda_devices = n_cuda_devices
         self.store_activations = store_activations
         self.disable_decoder = disable_decoder
-        self.num_style_interferences = num_style_interferences
 
         self.skip_activations = []
         self.feature_models = [] #the style mappers
-        
+
         self.img_dims_list = [] #the dims H, W as we move through
         self.channels_list = [] #the number of channels as we move through
 
 
         # Encoder
         self.enc_layers, self.enc_layer_names, self.enc_layer_dims = self.prepare_encoder(input_dim, enc_config)
-        self.prepare_feature_maps(self.channels_list[-self.num_style_interferences:], num_instruments, style_hidden_size)
-
         self.encoder = nn.ModuleList(self.enc_layers[1:])
         # input(self.encoder)
         self.code_size = self.enc_layer_dims[-1]
@@ -84,24 +81,24 @@ class ConvAE(nn.Module):
             # https://discuss.pytorch.org/t/loading-weights-for-cpu-model-while-trained-on-gpu/1032/1
             # Loading weights for CPU model while trained on GPU
             self.load_state_dict(torch.load(states_file, map_location=lambda storage, loc: storage))
-    
+
     def eval(self):
         print("entering eval mode!")
         self.encoder.eval()
         self.decoder.eval()
-    
+
     def train(self):
         print("entering train mode")
         self.encoder.train()
         self.decoder.train()
 
-    def forward(self, images, style_vector):
+    def forward(self, images):
         code, pool_idxs = self.encode(images, ret_pool_idxs=True)
         if self.disable_decoder:
             return code
         else:
             #remove this tanh???
-            out = self.tanh(self.decode(code, style_vector, pool_idxs=pool_idxs))
+            out = self.tanh(self.decode(code, pool_idxs=pool_idxs))
             return out, code
 
     def prepare_encoder(self, input_dim, enc_config):
@@ -152,22 +149,6 @@ class ConvAE(nn.Module):
 
         return layers, layer_names, layer_dims
 
-    def prepare_feature_maps(self, dims_list, num_instruments, num_hidden):
-        dims_list.reverse() #because we are reversing
-        for dim in dims_list:
-            self.feature_models.append(nn.Sequential(nn.Linear(num_instruments, num_hidden, bias = True),
-                                                     nn.Sigmoid(),
-                                                     nn.Linear(num_hidden, dim, bias = True),
-                                                     ).cuda())
-            
-    def load_feature_maps(self, step):
-        for i, model in enumerate(self.feature_models):
-            model.load_state_dict(torch.load(f"feature_maps{i}_{step}.pt"))
-        
-    def save_feature_maps(self, step):
-        for i, model in enumerate(self.feature_models):
-            torch.save(model.state_dict(), f"feature_maps{i}_{step}.pt")
-
     def encode(self, x, ret_pool_idxs=False):
         self.skip_activations.clear()
         pool_idxs = []
@@ -188,10 +169,9 @@ class ConvAE(nn.Module):
         else:
             return x
 
-    def decode(self, x, style_vector, pool_idxs=None):
+    def decode(self, x, pool_idxs=None):
         self.skip_activations.reverse()
         conv_counter = 0
-        style_counter = 0
         for i, l in enumerate(self.decoder):
             if "Unpool" in str(l):
                 if pool_idxs is None:
@@ -201,17 +181,9 @@ class ConvAE(nn.Module):
                 x = l(x, pool_idxs.pop())
             elif "ConvTranspose" in str(l):
                 x = l(x, output_size=(x.shape[0], *self.enc_layer_dims[-i - 2]))  # TODO: fix hack for output_size
-                  #DOING AN ABLATION
-                if conv_counter < len(self.skip_activations):
-                    x += self.skip_activations[conv_counter] #skip that last layer too
-                    
-                if style_counter < len(self.feature_models):
-                    curr_style = self.feature_models[style_counter].forward(style_vector)
-                    curr_style = torch.unsqueeze(curr_style, 2)
-                    curr_style = torch.unsqueeze(curr_style, 2)
-                    #RUNNING AN ABLATION 
-                    x *= torch.tile(curr_style, (1, 1, x.shape[2], x.shape[3]))
-                style_counter += 1
+                # if conv_counter < len(self.skip_activations):
+                #     x += self.skip_activations[conv_counter] #skip that last layer too
+
                 conv_counter += 1
             else:
                 x = l(x)

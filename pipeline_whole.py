@@ -20,7 +20,9 @@ class CrumpleLibrary(IterableDataset):
             self.smooth_list.append(smooth)
 
     def __len__(self):
-        return self.num_items
+        return self.num_items // 2
 
     def __getitem__(self, idx):
-        return self.crumpled_list[idx], self.smooth_list[idx]
+        # later, we will delegate to a process function
+        return np.transpose(np.array(self.crumpled_list[idx] / 255.), axes = (2, 0, 1)), \
+               np.transpose(np.array(self.smooth_list[idx] / 255.), axes = (2, 0, 1))
