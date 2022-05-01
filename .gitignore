@@ -6,4 +6,6 @@ __pycache__
 data/*
 !data/README.md
 
+*.pkl
+
 *.blend1

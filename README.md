@@ -17,7 +17,7 @@ the full ImageNet dataset is extremely large.
 To access ImageNet data, sign up for an account at
 [https://image-net.org/](https://image-net.org/). Then, download
 the "blurred validation images" under the "Face obfuscation in ILSVRC"
-heading. This will download `val_blurred.zip`. Extract this archive into
+heading. This will download `val_blurred.gz`. Extract this archive into
 the `data/val_blurred` directory. The structure should look like the
 following:
 
