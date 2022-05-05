@@ -181,8 +181,10 @@ class ConvAE(nn.Module):
                 x = l(x, pool_idxs.pop())
             elif "ConvTranspose" in str(l):
                 x = l(x, output_size=(x.shape[0], *self.enc_layer_dims[-i - 2]))  # TODO: fix hack for output_size
-                # if conv_counter < len(self.skip_activations):
-                #     x += self.skip_activations[conv_counter] #skip that last layer too
+                if conv_counter < len(self.skip_activations):
+                    # input(x.shape)
+                    # input(self.skip_activations[conv_counter].shape)
+                    x += self.skip_activations[conv_counter] #skip that last layer too
 
                 conv_counter += 1
             else:
