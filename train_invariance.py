@@ -7,7 +7,8 @@ import os
 import time
 from shutil import copyfile
 import matplotlib.pyplot as plt
-from ConvAE import ConvAE, create_network, accuracy_1_min_mab, normalized_loss
+from EncoderDecoder import Encoder, Decoder
+# from ConvAE import ConvAE, create_network, accuracy_1_min_mab, normalized_loss
 from pipeline_whole import CrumpleLibrary
 from torch.utils.tensorboard import SummaryWriter
 sampler_dataset = pickle.load(open("dataset_10000.pkl", "rb"))
@@ -52,24 +53,29 @@ def visualize(crumpled, smooth, output, MI_map, save = False, step = 'no-step', 
     if save:
         plt.savefig(f"{step}.png", bbox_inches='tight',pad_inches = 0)
 
-def make_generator():
-    feature_maps = 64
-    depth = 6
-    pooling_freq = 1e100  # large number to disable pooling layers
-    strided_conv_freq = 2
-    strided_conv_feature_maps = 64
-    input_dim = (3, 512, 512)
+# def make_generator():
+#     feature_maps = 64
+#     depth = 6
+#     pooling_freq = 1e100  # large number to disable pooling layers
+#     strided_conv_freq = 2
+#     strided_conv_feature_maps = 64
+#     input_dim = (3, 512, 512)
+#
+#     CONV_ENC_BLOCK = [("conv1", feature_maps), ("relu1", None)]
+#     CONV_ENC_LAYERS = create_network(CONV_ENC_BLOCK, depth,
+#                                         pooling_freq=pooling_freq,
+#                                         strided_conv_freq=strided_conv_freq,
+#                                         strided_conv_channels=strided_conv_feature_maps,
+#                                         batch_norm_freq = 2
+#                                         )
+#     CONV_ENC_NW = CONV_ENC_LAYERS
+#     model = ConvAE(input_dim, enc_config=CONV_ENC_NW)
+#     return model
 
-    CONV_ENC_BLOCK = [("conv1", feature_maps), ("relu1", None)]
-    CONV_ENC_LAYERS = create_network(CONV_ENC_BLOCK, depth,
-                                        pooling_freq=pooling_freq,
-                                        strided_conv_freq=strided_conv_freq,
-                                        strided_conv_channels=strided_conv_feature_maps,
-                                        batch_norm_freq = 2
-                                        )
-    CONV_ENC_NW = CONV_ENC_LAYERS
-    model = ConvAE(input_dim, enc_config=CONV_ENC_NW)
-    return model
+def make_generator():
+    encoder = Encoder((3, 512, 512))
+    decoder = Decoder((3, 512, 512))
+    return encoder, decoder
 
 
 def soft_make_dir(path):
@@ -81,7 +87,7 @@ def soft_make_dir(path):
 def to_numpy(tensor):
     return tensor.detach().cpu().numpy()
 
-def test_evaluate(generator_model, device, step, save = True):
+def test_evaluate(encoder, decoder, device, step, save = True):
     # should save the model
     loss = nn.MSELoss()
     random_selection = np.random.randint(valid_size)
@@ -95,7 +101,8 @@ def test_evaluate(generator_model, device, step, save = True):
             crumpled, smooth = valid_sampler.next()
             crumpled = torch.as_tensor(crumpled, device=device, dtype = torch.float32)
             smooth = torch.as_tensor(smooth, device = device, dtype = torch.float32)
-            proposed_smooth, _ = generator_model(crumpled) #sanity check
+            encoding, activations = encoder(crumpled)
+            proposed_smooth = decoder(encoding, activations)
             loss_value += loss(smooth, proposed_smooth)
 
             hist, value = generate_mutual_information(smooth.cpu().detach().numpy(), proposed_smooth.cpu().detach().numpy(), hist = True)
@@ -128,7 +135,7 @@ def generate_mutual_information(img1, img2, hist = False):
 if __name__ == "__main__":
     #TODO: missing augmentations, weird structure, etc
     #TODO: these are the parameters you can modify
-    experiment = "baseline_autoencoder_with_logging"
+    experiment = "test_custom_model"
     load_model = False
 
     num_training_steps = 50000
@@ -136,27 +143,30 @@ if __name__ == "__main__":
 
     writer = SummaryWriter(path)  # you can specify logging directory
 
-    generator_model = make_generator()
+    encoder, decoder = make_generator()
     print("done generating and loading models")
     if torch.cuda.is_available():
         print("cuda available!")
         device = "cuda"
-        generator_model = generator_model.cuda()
+        encoder = encoder.cuda()
+        decoder = decoder.cuda()
     else:
         device = "cpu"
 
     if load_model:
         checkpoint = 100000
-        generator_model.load_state_dict(torch.load(f'{path}/model_weights_{checkpoint}.pth'))
-        test_evaluate(generator_model, device, step = "TEST", save = True)
+        encoder.load_state_dict(torch.load(f'{path}/model_weights_encoder_{checkpoint}.pth'))
+        decoder.load_state_dict(torch.load(f'{path}/model_weights_decoder_{checkpoint}.pth'))
+        test_evaluate(encoder, decoder, device, step = "TEST", save = True)
         quit()
 
-    AE_optimizer = torch.optim.Adam(generator_model.parameters(), lr=1e-3)
+    torch.autograd.set_detect_anomaly(True)
+    encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=1e-3)
+    decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=1e-3)
     loss = nn.MSELoss()
 
     soft_make_dir(path)
     copyfile("train_vanilla_autoencoder.py", f"{path}/train_vanilla_autoencoder.py")
-    copyfile("ConvAE.py", f"{path}/ConvAE.py")
     os.chdir(path)
 
     norm_mult = 1e-7
@@ -164,24 +174,30 @@ if __name__ == "__main__":
     for i in range(num_training_steps + 1):
         if i % 1217 == 0:
             train_sampler = iter(train_generator)
-        if i % 1000 == 0:
-            writer.flush()
-            print("eval time!")
-            torch.save(generator_model.state_dict(), f"model_weights_{i}.pth")  # saves everything from the state dictionary
-            test_evaluate(generator_model, device, step = i, save = True)
-        # beg = time.time()
+
+        # if i % 1000 == 0:
+        #     writer.flush()
+        #     print("eval time!")
+        #     torch.save(encoder.state_dict(), f"model_weights_encoder_{i}.pth")  # saves everything from the state dictionary
+        #     torch.save(decoder.state_dict(), f"model_weights_decoder_{i}.pth")  # saves everything from the state dictionary
+        #     test_evaluate(encoder, decoder, device, step = i, save = True)
+        beg = time.time()
         crumpled, smooth = train_sampler.next()
-        # print("\t" + str(time.time() - beg))
-        # beg = time.time()
         crumpled = torch.as_tensor(crumpled, device=device, dtype = torch.float32)
         smooth = torch.as_tensor(smooth, device = device, dtype = torch.float32)
-        predicted_smooth, _ = generator_model.forward(crumpled) # sanity check: can we recreate?
+        embedding, activations = encoder.forward(crumpled) # sanity check: can we recreate?
+        predicted_smooth = decoder(embedding, activations)
         encoding_loss = loss(smooth, predicted_smooth) #+ norm_mult * torch.sum(torch.abs(out))
+
         if i % 25 == 0:
             print(i, " ", encoding_loss.cpu().detach().numpy())
-        AE_optimizer.zero_grad()
+
+        encoder_optimizer.zero_grad()
+        decoder_optimizer.zero_grad()
         encoding_loss.backward()
-        AE_optimizer.step()
+        encoder_optimizer.step()
+        decoder_optimizer.step()
+
         writer.add_scalar("Loss/train_loss", encoding_loss, i)
         # print(time.time() - beg)
     writer.close()
