@@ -37,6 +37,7 @@ class Decoder(nn.Module):
         self.img_C, self.img_H, self.img_W = self.input_dim
         self.activations = []
 
+        #TODO batchnorm
         self.convs = nn.ModuleList([
             nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2),  # pooling
             nn.ConvTranspose2d(32, 32, kernel_size=3, padding=1, stride=1),

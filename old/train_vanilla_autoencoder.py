@@ -1,16 +1,13 @@
 import pickle
 import numpy as np
-import random
 import torch
 from torch import nn
 import os
-import time
 from shutil import copyfile
 import matplotlib.pyplot as plt
-from ConvAE import ConvAE, create_network, accuracy_1_min_mab, normalized_loss
-from pipeline_whole import CrumpleLibrary
+from old.ConvAE import ConvAE, create_network
 from torch.utils.tensorboard import SummaryWriter
-sampler_dataset = pickle.load(open("dataset_10000.pkl", "rb"))
+sampler_dataset = pickle.load(open("../dataset_10000.pkl", "rb"))
 print("done loading data")
 
 # TODO: add csv logging on top of tensorboard because it's not working
