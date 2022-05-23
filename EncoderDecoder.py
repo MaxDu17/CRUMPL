@@ -23,11 +23,12 @@ class Encoder(nn.Module):
         ])
 
     def forward(self, images):
+        self.activations.clear() #just in case!
         x = images
         for module in self.convs:
             x = torch.relu(module(x))
-            self.activations.append(x)
-        self.activations.pop() #discard the last one because it's the embedding
+            # self.activations.append(x)
+        # self.activations.pop() #discard the last one because it's the embedding
         return x, self.activations
 
 class Decoder(nn.Module):
