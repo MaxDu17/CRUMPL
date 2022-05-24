@@ -11,7 +11,9 @@ from EncoderDecoder import Encoder, Decoder
 import csv
 from pipeline_whole import CrumpleLibrary
 from torch.utils.tensorboard import SummaryWriter
-sampler_dataset = pickle.load(open("dataset_10000.pkl", "rb"))
+from utils import *
+
+sampler_dataset = pickle.load(open("dataset_49000_small.pkl", "rb"))
 sampler_dataset.set_mode("single_sample")
 
 print("done loading data")
@@ -22,7 +24,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data import random_split
 
 valid_size = 128
-valid, train = random_split(sampler_dataset, [valid_size, 5000 - valid_size])
+valid, train = random_split(sampler_dataset, [valid_size, 49000 - valid_size])
 train_generator = DataLoader(train, batch_size=32, shuffle=True, num_workers=0)
 valid_generator = DataLoader(valid, batch_size=1, shuffle=False, num_workers=0)
 
@@ -57,15 +59,6 @@ def make_generator():
     decoder = Decoder((3, 512, 512))
     return encoder, decoder
 
-
-def soft_make_dir(path):
-    try:
-        os.mkdir(path)
-    except:
-        print("directory already exists!")
-
-def to_numpy(tensor):
-    return tensor.detach().cpu().numpy()
 
 def test_evaluate(encoder, decoder, device, step, save = True):
     loss = nn.MSELoss()
@@ -104,20 +97,9 @@ def test_evaluate(encoder, decoder, device, step, save = True):
     encoder.train(True)
     decoder.train(True)
 
-def generate_mutual_information(img1, img2, hist = False):
-    hist_2d, x_edges, y_edges = np.histogram2d(img1.ravel(), img2.ravel(), bins = 20)
-    joint_dist = hist_2d / np.sum(hist_2d)
-    x_dist = np.sum(joint_dist, axis = 1)
-    y_dist = np.sum(joint_dist, axis = 0)
-    independent_dist = x_dist[:, None] * y_dist[None, :]
-    non_zero_mask = joint_dist > 0
-    if hist:
-        return hist_2d, np.sum(joint_dist[non_zero_mask] * np.log(joint_dist[non_zero_mask] / independent_dist[non_zero_mask]))
-    else:
-        return np.sum(joint_dist[non_zero_mask] * np.log(joint_dist[non_zero_mask] / independent_dist[non_zero_mask]))
 
 if __name__ == "__main__":
-    experiment = "baseline_new"
+    experiment = "unet_new_baseline"
     load_model = False
 
     num_training_steps = 10000
@@ -159,7 +141,7 @@ if __name__ == "__main__":
     norm_mult = 1e-7
     train_sampler = iter(train_generator)
     for i in range(num_training_steps + 1):
-        if i % 151 == 0:
+        if i % 1527 == 0:
             train_sampler = iter(train_generator)
 
         if i % 200 == 0:
@@ -172,7 +154,7 @@ if __name__ == "__main__":
         crumpled, smooth = train_sampler.next()
         crumpled = torch.as_tensor(crumpled, device=device, dtype = torch.float32)
         smooth = torch.as_tensor(smooth, device = device, dtype = torch.float32)
-        embedding, activations = encoder.forward(crumpled) # sanity check: can we recreate?
+        embedding, activations = encoder.forward(crumpled) # sanity check: can we recreate? #TODO: this should be crumpled
         predicted_smooth = decoder(embedding, activations)
         encoding_loss = loss(smooth, predicted_smooth) #+ norm_mult * torch.sum(torch.abs(out))
 

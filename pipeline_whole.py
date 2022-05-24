@@ -49,11 +49,22 @@ class CrumpleLibrary(IterableDataset):
             return np.transpose(np.array(self.crumpled_list[idx] / 255.), axes=(2, 0, 1)), \
                    np.transpose(np.array(self.smooth_list[idx] / 255.), axes=(2, 0, 1)), 1
 
+    def classifier_sample(self, idx):
+        if np.random.rand() > 0.5:
+            selected_list = self.smooth_list
+            label = np.array([1])
+        else:
+            selected_list = self.crumpled_list
+            label = np.array([0])
+        return np.transpose(np.array(selected_list[idx] / 255.), axes = (2, 0, 1)), label
+
     def __getitem__(self, idx):
         if self.mode == "pos_neg_sample":
             return self.pos_neg_sample(idx)
         elif self.mode == "single_sample":
             return self.single_sample(idx)
+        elif self.mode == "classifier_sample":
+            return self.classifier_sample(idx)
         else:
             raise Exception("invalid type!")
         # later, we will delegate to a process function

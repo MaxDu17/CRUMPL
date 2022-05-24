@@ -11,6 +11,8 @@ from EncoderDecoder import Encoder, Decoder
 import csv
 from pipeline_whole import CrumpleLibrary
 from torch.utils.tensorboard import SummaryWriter
+from utils import *
+
 sampler_dataset = pickle.load(open("dataset_10000_small.pkl", "rb"))
 sampler_dataset.set_mode("pos_neg_sample")
 print("done loading data")
@@ -18,17 +20,11 @@ print("done loading data")
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
 
-valid_size = 128
-batch_size = 32
-valid, train = random_split(sampler_dataset, [valid_size, 5000 - valid_size])
-train_generator = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=0)
-valid_generator = DataLoader(valid, batch_size=1, shuffle=False, num_workers=0)
-
 
 fig, (ax1, ax2, ax3, ax4) = plt.subplots(ncols=4)
 plt.ion() #needed to prevent show() from blocking
 
-
+#TODO: make modular
 def visualize(crumpled, smooth, output, MI_map, save = False, step = 'no-step', visible = True):
     ax1.clear()
     ax2.clear()
@@ -55,18 +51,6 @@ def make_generator():
     decoder = Decoder((3, 128, 128))
     return encoder, decoder
 
-
-def soft_make_dir(path):
-    try:
-        os.mkdir(path)
-    except:
-        print("directory already exists!")
-
-def to_numpy(tensor):
-    return tensor.detach().cpu().numpy()
-
-def to_tensor(arr, device):
-    return torch.as_tensor(arr, device=device, dtype=torch.float32)
 
 def test_evaluate(encoder, decoder, device, step, save = True):
     print("not implemented yet!")
@@ -103,18 +87,6 @@ def test_evaluate(encoder, decoder, device, step, save = True):
     print(f"validation loss: {loss_value.item()} (for scale: {loss_value.item() / (valid_size)}")
     csv_valid_writer.writerow([step, MI_value, loss_value.item()])
 
-def generate_mutual_information(img1, img2, hist = False):
-    hist_2d, x_edges, y_edges = np.histogram2d(img1.ravel(), img2.ravel(), bins = 20)
-    joint_dist = hist_2d / np.sum(hist_2d)
-    x_dist = np.sum(joint_dist, axis = 1)
-    y_dist = np.sum(joint_dist, axis = 0)
-    independent_dist = x_dist[:, None] * y_dist[None, :]
-    non_zero_mask = joint_dist > 0
-    if hist:
-        return hist_2d, np.sum(joint_dist[non_zero_mask] * np.log(joint_dist[non_zero_mask] / independent_dist[non_zero_mask]))
-    else:
-        return np.sum(joint_dist[non_zero_mask] * np.log(joint_dist[non_zero_mask] / independent_dist[non_zero_mask]))
-
 
 if __name__ == "__main__":
     #TODO: missing augmentations, weird structure, etc
@@ -126,6 +98,12 @@ if __name__ == "__main__":
     path = f"G:\\Desktop\\Working Repository\\CRUMPL\\experiments\\{experiment}"
 
     writer = SummaryWriter(path)  # you can specify logging directory
+
+    valid_size = 128
+    batch_size = 32
+    valid, train = random_split(sampler_dataset, [valid_size, 5000 - valid_size])
+    train_generator = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=0)
+    valid_generator = DataLoader(valid, batch_size=1, shuffle=False, num_workers=0)
 
 
 
