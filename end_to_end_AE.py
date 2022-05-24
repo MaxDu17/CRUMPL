@@ -102,7 +102,7 @@ if __name__ == "__main__":
     experiment = "unet_new_baseline"
     load_model = False
 
-    num_training_steps = 10000
+    num_training_steps = 50000
     path = f"G:\\Desktop\\Working Repository\\CRUMPL\\experiments\\{experiment}"
 
     writer = SummaryWriter(path)  # you can specify logging directory
@@ -147,9 +147,12 @@ if __name__ == "__main__":
         if i % 200 == 0:
             writer.flush()
             print("eval time!")
-            torch.save(encoder.state_dict(), f"model_weights_encoder_{i}.pth")  # saves everything from the state dictionary
-            torch.save(decoder.state_dict(), f"model_weights_decoder_{i}.pth")  # saves everything from the state dictionary
             test_evaluate(encoder, decoder, device, step = i, save = True)
+        if i % 2500 == 0:
+            torch.save(encoder.state_dict(),
+                       f"model_weights_encoder_{i}.pth")  # saves everything from the state dictionary
+            torch.save(decoder.state_dict(),
+                       f"model_weights_decoder_{i}.pth")  # saves everything from the state dictionary
         beg = time.time()
         crumpled, smooth = train_sampler.next()
         crumpled = torch.as_tensor(crumpled, device=device, dtype = torch.float32)
