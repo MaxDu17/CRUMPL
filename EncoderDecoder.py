@@ -4,7 +4,7 @@ from torch import nn
 from torch.nn import functional as F
 import torchvision.models as models
 import torchvision.transforms as transforms
-
+from torchsummary import summary
 
 class Encoder(nn.Module):
     def __init__(self, input_dim):
@@ -42,7 +42,7 @@ class Decoder(nn.Module):
         self.img_C, self.img_H, self.img_W = self.input_dim
         self.activations = []
 
-        #TODO batchnorm
+        #TODO intancenorm
         self.convs = nn.ModuleList([
             nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2),  # pooling
             nn.ConvTranspose2d(64, 32, kernel_size=3, padding=1, stride=1),
@@ -97,7 +97,8 @@ class Discriminator(nn.Module):
     def forward(self, images):
         self.activations.clear() #just in case!
         x = images
-        x = self.resizing(x)
+        # summary(self.convs, (3, 128, 128))
+        # x = self.resizing(x)
         x = self.convs(x)
         x = torch.flatten(x, start_dim = 1) # so you don't flatten the batch
         # print(x)

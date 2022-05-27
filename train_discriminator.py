@@ -11,10 +11,10 @@ from EncoderDecoder import Discriminator
 import csv
 from pipeline_whole import CrumpleLibrary
 from torch.utils.tensorboard import SummaryWriter
-sampler_dataset = pickle.load(open("dataset_10000_small.pkl", "rb"))
+sampler_dataset = pickle.load(open("frozen_datasets/dataset_10000_small.pkl", "rb"))
 sampler_dataset.set_mode("classifier_sample")
 print("done loading data")
-from utils import *
+from utils.utils import *
 
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
