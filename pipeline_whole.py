@@ -19,6 +19,13 @@ class CrumpleLibrary(IterableDataset):
             crumpled = cv2.resize(crumpled, (128, 128))
             smooth = imageio.imread(self.base_directory + file_list[i + 1])
             smooth = cv2.resize(smooth, (128, 128))
+
+            # remove alpha channel if it exists
+            if crumpled.shape[2] == 4:
+                crumpled = crumpled[:, :, :3]
+            if smooth.shape[2] == 4:
+                smooth = smooth[:, :, :3]
+
             self.crumpled_list.append(crumpled)
             self.smooth_list.append(smooth)
 
