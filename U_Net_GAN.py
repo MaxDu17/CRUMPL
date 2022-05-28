@@ -6,6 +6,7 @@ from EncoderDecoder import Encoder, Decoder, Discriminator
 import csv
 from torch.utils.tensorboard import SummaryWriter
 from utils.utils import *
+from torchsummary import summary
 
 sampler_dataset = pickle.load(open("frozen_datasets/dataset_49000_small.pkl", "rb"))
 sampler_dataset.set_mode("single_sample")
@@ -22,31 +23,7 @@ valid, train = random_split(sampler_dataset, [valid_size, 49000 - valid_size])
 train_generator = DataLoader(train, batch_size=32, shuffle=True, num_workers=0)
 valid_generator = DataLoader(valid, batch_size=1, shuffle=False, num_workers=0)
 
-
-fig, (ax1, ax2, ax3, ax4) = plt.subplots(ncols=4)
-plt.ion() #needed to prevent show() from blocking
-
-
-def visualize(crumpled, smooth, output, MI_map, save = False, step = 'no-step', visible = True):
-    ax1.clear()
-    ax2.clear()
-    ax3.clear()
-    ax4.clear()
-    ax1.set_axis_off()
-    ax2.set_axis_off()
-    ax3.set_axis_off()
-    ax1.title.set_text(f"Crumpled")
-    ax1.imshow(np.transpose(crumpled, (1, 2, 0)))
-    ax2.imshow(np.transpose(smooth, (1, 2, 0)))
-    ax2.title.set_text(f"Smooth")
-    ax3.title.set_text(f"Output")
-    ax3.imshow(np.transpose(output, (1, 2, 0)))
-    ax4.imshow(MI_map)
-    if visible:
-        plt.show()
-    plt.pause(1)
-    if save:
-        plt.savefig(f"{step}.png", bbox_inches='tight',pad_inches = 0)
+ax_objects = generate_plot(4) #creates plots that help with visualization
 
 def make_generator():
     encoder = Encoder((3, 128, 128))
@@ -83,7 +60,9 @@ def test_evaluate(encoder, decoder, device, step, save = True):
             MI_base += generate_mutual_information(to_numpy(smooth), to_numpy(smooth))
             MI_low += generate_mutual_information(to_numpy(smooth), to_numpy(crumpled))
             if i == random_selection:
-                visualize(to_numpy(crumpled[0]), to_numpy(smooth[0]), to_numpy(proposed_smooth[0]), hist_log, save = save, step = step, visible = True)
+                visualize(ax_objects, [to_numpy(crumpled[0]), to_numpy(smooth[0]), to_numpy(proposed_smooth[0]), hist_log],
+                          ["crumpled", "smooth", "output", "Mutual Info"], save = save, step = step, visible = True)
+
     writer.add_scalar("Loss/valid", loss_value, step)
     writer.add_scalar("Loss/valid_MI", MI_value, step)
     print(f"Mutual information value (higher better): {MI_value}, which is upper bounded by {MI_base} and lower bounded by {MI_low}")
@@ -109,7 +88,7 @@ def generator_loss(logits_fake, device):
     return real_score
 
 if __name__ == "__main__":
-    experiment = "gan_modified_losses"
+    experiment = "gan_scratch"
     load_model = False
 
     num_training_steps = 50000
@@ -141,6 +120,9 @@ if __name__ == "__main__":
     discriminator_optimizer = torch.optim.Adam(discriminator.parameters(), lr=2e-4, betas=(0.5,0.999))
     loss = nn.MSELoss()
 
+    # summary(discriminator, (3, 128, 128))
+    # input("here")
+
     soft_make_dir(path)
     os.chdir(path)
     f = open("metrics_train.csv", "w", newline="")
@@ -157,7 +139,7 @@ if __name__ == "__main__":
         if i % 1527 == 0:
             train_sampler = iter(train_generator)
 
-        if i % 100 == 0:
+        if i % 500 == 0:
             writer.flush()
             print("eval time!")
             test_evaluate(encoder, decoder, device, step = i, save = True)
@@ -177,8 +159,8 @@ if __name__ == "__main__":
         discriminator_optimizer.zero_grad()
         embedding, activations = encoder.forward(crumpled) # detach because we don't care about it in generator
         predicted_smooth = decoder(embedding, activations).detach()
-        real_logits = discriminator(smooth)
-        fake_logits = discriminator(predicted_smooth)
+        real_logits = discriminator(smooth, crumpled)
+        fake_logits = discriminator(predicted_smooth, crumpled)
         d_loss = discriminator_loss(real_logits, fake_logits, device)
         d_loss.backward()
         discriminator_optimizer.step()
@@ -188,7 +170,7 @@ if __name__ == "__main__":
         decoder_optimizer.zero_grad()
         embedding, activations = encoder.forward(crumpled) # detach because we don't care about it in generator
         predicted_smooth = decoder(embedding, activations)
-        fake_logits = discriminator(predicted_smooth)
+        fake_logits = discriminator(predicted_smooth, crumpled)
         g_loss = generator_loss(fake_logits, device) + 100 * loss(smooth, predicted_smooth)
         # g_loss = loss(smooth, predicted_smooth)
         g_loss.backward()

@@ -1,3 +1,5 @@
+# Written by Max Du
+
 import numpy as np
 import torch
 from torch import nn
@@ -5,6 +7,7 @@ from torch.nn import functional as F
 import torchvision.models as models
 import torchvision.transforms as transforms
 from torchsummary import summary
+
 
 class Encoder(nn.Module):
     def __init__(self, input_dim):
@@ -29,7 +32,8 @@ class Encoder(nn.Module):
         self.activations.clear() #just in case!
         x = images
         for module in self.convs:
-            x = torch.relu(module(x))
+            x = module(x)
+            x = nn.functional.leaky_relu(x)
             self.activations.append(x)
         self.activations.pop() #discard the last one because it's the embedding
         return x, self.activations
@@ -59,7 +63,7 @@ class Decoder(nn.Module):
         x = encoding
         for module in self.convs:
             x = module(x)
-            x = torch.relu(x)
+            x = nn.functional.leaky_relu(x)
             if len(activations) > 0: #passthrough connections
                 x = torch.concat((x, activations.pop()), dim = 1)
                 # x = x + activations.pop()
@@ -74,32 +78,34 @@ class Discriminator(nn.Module):
         self.activations = []
 
         self.convs = nn.ModuleList([
-            # nn.Conv2d(self.img_C, 8, kernel_size=7, padding = 3, stride=1),
-            # nn.Conv2d(8, 8, kernel_size=7, padding=3, stride=1),
-            # nn.Conv2d(8, 16, kernel_size=2, stride=2), #pooling
-            # nn.Conv2d(16, 16, kernel_size=5, padding=2, stride=1),
-            # nn.Conv2d(16, 16, kernel_size=5, padding=2, stride=1),
-            # nn.Conv2d(16, 32, kernel_size=2, stride=2),  # pooling
-            # nn.Conv2d(32, 32, kernel_size=3, padding=1, stride=1),
-            # nn.Conv2d(32, 32, kernel_size=3, padding=1, stride=1),
-            # nn.Conv2d(32, 64, kernel_size=2, stride=2),  # pooling
+            nn.Conv2d(self.img_C * 2, 8, kernel_size=7, padding = 3, stride=1),
+            nn.BatchNorm2d(8),
+            nn.Conv2d(8, 8, kernel_size=7, padding=3, stride=1),
+            nn.Conv2d(8, 16, kernel_size=2, stride=2), #pooling
+            nn.BatchNorm2d(16),
+            nn.Conv2d(16, 16, kernel_size=5, padding=2, stride=1),
+            nn.Conv2d(16, 16, kernel_size=2, stride=2),  # pooling
+            nn.BatchNorm2d(16),
+            nn.Conv2d(16, 16, kernel_size=3, padding=1, stride=1),
+            nn.Conv2d(16, 16, kernel_size=2, stride=2),  # pooling
+            nn.BatchNorm2d(16),
+            nn.Conv2d(16, 16, kernel_size=3, padding=1, stride=1),
+            nn.Conv2d(16, 16, kernel_size=2, stride=2),  # pooling
         ])
-        self.resizing = transforms.Resize((224))
-
-        resnet = models.resnet18(pretrained=False)
-        resnet.fc = nn.Identity()
-        self.convs = resnet
 
         self.classifier = nn.ModuleList([
-            nn.Linear(512, 1)
+            nn.Linear(1024, 1)
         ])
 
-    def forward(self, images):
+    def forward(self, a, b):
         self.activations.clear() #just in case!
-        x = images
-        # summary(self.convs, (3, 128, 128))
-        # x = self.resizing(x)
-        x = self.convs(x)
+        x = torch.concat([a, b], dim = 1)
+        for module in self.convs:
+            x = module(x)
+            x = nn.functional.leaky_relu(x)
+            # nn.functional.leaky_relu(module(x))
+            # x = torch.relu(module(x))
+        # x = self.convs(x)
         x = torch.flatten(x, start_dim = 1) # so you don't flatten the batch
         # print(x)
         for module in self.classifier:
