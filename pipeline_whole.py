@@ -41,37 +41,44 @@ class CrumpleLibrary(IterableDataset):
         return np.transpose(np.array(self.crumpled_list[idx] / 255.), axes = (2, 0, 1)), \
                np.transpose(np.array(self.smooth_list[idx] / 255.), axes = (2, 0, 1))
 
-    def pos_neg_sample(self, idx):
-        POSITIVE_PROB = 0.5
-        if np.random.rand() > POSITIVE_PROB:
-            other_index = np.random.randint(0, self.__len__())
-            # picking which list you end up picking from
-            if np.random.rand() > 0.5:
-                selected_list = self.smooth_list
-            else:
-                selected_list = self.crumpled_list
-            return np.transpose(np.array(self.crumpled_list[idx] / 255.), axes=(2, 0, 1)), \
-                   np.transpose(np.array(selected_list[other_index] / 255.), axes=(2, 0, 1)), -1
-        else:
-            return np.transpose(np.array(self.crumpled_list[idx] / 255.), axes=(2, 0, 1)), \
-                   np.transpose(np.array(self.smooth_list[idx] / 255.), axes=(2, 0, 1)), 1
+    def single_unpaired_sample(self, idx):
+        second_index = np.random.randint(0, self.__len__())
+        return np.transpose(np.array(self.crumpled_list[idx] / 255.), axes = (2, 0, 1)), \
+               np.transpose(np.array(self.smooth_list[second_index] / 255.), axes = (2, 0, 1))
 
-    def classifier_sample(self, idx):
-        if np.random.rand() > 0.5:
-            selected_list = self.smooth_list
-            label = np.array([1])
-        else:
-            selected_list = self.crumpled_list
-            label = np.array([0])
-        return np.transpose(np.array(selected_list[idx] / 255.), axes = (2, 0, 1)), label
+    # def pos_neg_sample(self, idx):
+    #     POSITIVE_PROB = 0.5
+    #     if np.random.rand() > POSITIVE_PROB:
+    #         other_index = np.random.randint(0, self.__len__())
+    #         # picking which list you end up picking from
+    #         if np.random.rand() > 0.5:
+    #             selected_list = self.smooth_list
+    #         else:
+    #             selected_list = self.crumpled_list
+    #         return np.transpose(np.array(self.crumpled_list[idx] / 255.), axes=(2, 0, 1)), \
+    #                np.transpose(np.array(selected_list[other_index] / 255.), axes=(2, 0, 1)), -1
+    #     else:
+    #         return np.transpose(np.array(self.crumpled_list[idx] / 255.), axes=(2, 0, 1)), \
+    #                np.transpose(np.array(self.smooth_list[idx] / 255.), axes=(2, 0, 1)), 1
+    #
+    # def classifier_sample(self, idx):
+    #     if np.random.rand() > 0.5:
+    #         selected_list = self.smooth_list
+    #         label = np.array([1])
+    #     else:
+    #         selected_list = self.crumpled_list
+    #         label = np.array([0])
+    #     return np.transpose(np.array(selected_list[idx] / 255.), axes = (2, 0, 1)), label
 
     def __getitem__(self, idx):
-        if self.mode == "pos_neg_sample":
-            return self.pos_neg_sample(idx)
-        elif self.mode == "single_sample":
+        # if self.mode == "pos_neg_sample":
+        #     return self.pos_neg_sample(idx)
+        if self.mode == "single_sample":
             return self.single_sample(idx)
-        elif self.mode == "classifier_sample":
-            return self.classifier_sample(idx)
+        elif self.mode == "single_unpaired_sample":
+            return self.single_unpaired_sample(idx)
+        # elif self.mode == "classifier_sample":
+        #     return self.classifier_sample(idx)
         else:
             raise Exception("invalid type!")
         # later, we will delegate to a process function

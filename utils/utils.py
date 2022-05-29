@@ -48,6 +48,7 @@ def run_through_model(uncrumpler, img_dir, save_dir, w_h, device):
     soft_make_dir(save_dir)
 
     file_list = sorted(os.listdir(img_dir))
+    uncrumpler.train(False)
     for i in range(len(file_list)):
         print(file_list[i])
         crumpled = imageio.imread(img_dir + file_list[i])
@@ -62,6 +63,7 @@ def run_through_model(uncrumpler, img_dir, save_dir, w_h, device):
         # proposed_smooth = to_numpy(decoder(encoding, activations)[0])
         # proposed_smooth_normalized = ((proposed_smooth - np.min(proposed_smooth)) / (np.max(proposed_smooth) - np.min(proposed_smooth)))
         plt.imsave(save_dir + file_list[i].split(".")[0] + "_uncrumpled.png", np.transpose(proposed_smooth_normalized, (1, 2, 0)))
+    uncrumpler.train(True)
 
 def generate_mutual_information(img1, img2, hist = False):
     hist_2d, x_edges, y_edges = np.histogram2d(img1.ravel(), img2.ravel(), bins = 20)

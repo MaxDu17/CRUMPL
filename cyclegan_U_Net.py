@@ -10,9 +10,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data import random_split
 from torch.utils.tensorboard import SummaryWriter
 
-from cyclegan.models import Generator, Discriminator, Composite
-# from cyclegan.models import Composite
-# from EncoderDecoder import PixGenerator, PixDiscriminator
+from cyclegan.models import Composite
+from EncoderDecoder import PixGenerator, PixDiscriminator
 
 from utils.utils import *
 
@@ -42,10 +41,11 @@ def train_generator_model(generator, optimizer, x, y):
     # output_id is the identity operator output
     # output_f is forward cycle
     # output_b is backward cycle
-    loss = d_loss(torch.squeeze(output_d), y[0]) \
-           + 5 * id_loss(torch.squeeze(output_id), y[1]) \
-           + 10 * f_loss(torch.squeeze(output_f), y[2]) \
-           + 10 * b_loss(torch.squeeze(output_b), y[3])
+
+    loss = d_loss(output_d, y[0]) \
+           + 5 * id_loss(output_id, y[1]) \
+           + 10 * f_loss(output_f, y[2]) \
+           + 10 * b_loss(output_b, y[3])
     loss.backward()
     optimizer.step()
 
@@ -55,7 +55,7 @@ def train_generator_model(generator, optimizer, x, y):
 def train_discriminator_model(discriminator, optimizer, x, y):
     optimizer.zero_grad()
     output_d = discriminator(x)
-    loss = 0.5 * d_loss(torch.squeeze(output_d), y)
+    loss = 0.5 * d_loss(output_d, y)
     loss.backward()
     optimizer.step()
 
@@ -112,17 +112,11 @@ def test_evaluate(uncrumpler, crumpler, device, step, writer = None, csv_writer 
     generated_library.set_mode('single_unpaired_sample')
 
 def train_cyclegan(n_epochs=1):
-    # gen_c_to_uc = PixGenerator(INPUT_SHAPE)
-    # gen_uc_to_c = PixGenerator(INPUT_SHAPE)
-    #
-    # disc_c = PixDiscriminator(INPUT_SHAPE)
-    # disc_uc = PixDiscriminator(INPUT_SHAPE)
+    gen_c_to_uc = PixGenerator(INPUT_SHAPE)
+    gen_uc_to_c = PixGenerator(INPUT_SHAPE)
 
-    gen_c_to_uc = Generator(input_shape=INPUT_SHAPE)
-    gen_uc_to_c = Generator(input_shape=INPUT_SHAPE)
-
-    disc_c = Discriminator(input_shape=INPUT_SHAPE)
-    disc_uc = Discriminator(input_shape=INPUT_SHAPE)
+    disc_c = PixDiscriminator(INPUT_SHAPE)
+    disc_uc = PixDiscriminator(INPUT_SHAPE)
 
     comp_c_to_uc = Composite(gen_c_to_uc, disc_uc, gen_uc_to_c)
     comp_uc_to_c = Composite(gen_uc_to_c, disc_c, gen_c_to_uc)
@@ -156,14 +150,14 @@ def train_cyclegan(n_epochs=1):
             x_real_c = to_tensor(x_real_c, device)
             x_real_uc = to_tensor(x_real_uc, device)
 
-            y_real_c = torch.ones((x_real_c.shape[0])).to(device)
-            y_real_uc = torch.ones((x_real_uc.shape[0])).to(device)
+            y_real_c = torch.ones((x_real_c.shape[0], 1, 4, 4)).to(device)
+            y_real_uc = torch.ones((x_real_uc.shape[0], 1, 4, 4)).to(device)
 
             x_fake_c = generate_fake_samples(gen_uc_to_c, x_real_uc)
             x_fake_uc = generate_fake_samples(gen_c_to_uc, x_real_c)
 
-            y_fake_c = torch.zeros((x_real_c.shape[0])).to(device)
-            y_fake_uc = torch.zeros((x_real_uc.shape[0])).to(device)
+            y_fake_c = torch.zeros((x_real_c.shape[0], 1, 4, 4)).to(device)
+            y_fake_uc = torch.zeros((x_real_uc.shape[0], 1, 4, 4)).to(device)
 
             # update uncrumpled -> crumpled generator
             uc_to_c_loss = train_generator_model(comp_uc_to_c, uc_to_c_optim, [x_real_uc, x_real_c],
