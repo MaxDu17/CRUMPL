@@ -6,18 +6,24 @@ import csv
 from torch.utils.tensorboard import SummaryWriter
 from utils.utils import *
 
-sampler_dataset = pickle.load(open("../frozen_datasets/dataset_10000_small.pkl", "rb"))
-sampler_dataset.set_mode("pos_neg_sample")
+sampler_dataset = pickle.load(open("frozen_datasets/dataset_49000_small.pkl", "rb"))
+sampler_dataset.set_mode("single_sample")
+
 print("done loading data")
 
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
 
+valid_size = 128
+valid, train = random_split(sampler_dataset, [valid_size, 49000 - valid_size])
+train_generator = DataLoader(train, batch_size=32, shuffle=True, num_workers=0)
+valid_generator = DataLoader(valid, batch_size=1, shuffle=False, num_workers=0)
+
 
 fig, (ax1, ax2, ax3, ax4) = plt.subplots(ncols=4)
 plt.ion() #needed to prevent show() from blocking
 
-#TODO: make modular
+
 def visualize(crumpled, smooth, output, MI_map, save = False, step = 'no-step', visible = True):
     ax1.clear()
     ax2.clear()
@@ -45,9 +51,7 @@ def make_generator():
     return encoder, decoder
 
 
-def test_evaluate(encoder, decoder, device, step, save = True):
-    print("not implemented yet!")
-    return
+def test_evaluate(encoder, decoder, device, step, writer = None, csv_writer = None, save = True):
     loss = nn.MSELoss()
     random_selection = np.random.randint(valid_size)
     loss_value = 0
@@ -55,13 +59,15 @@ def test_evaluate(encoder, decoder, device, step, save = True):
     MI_base = 0
     MI_low = 0
     valid_sampler = iter(valid_generator)
+    encoder.train(False)
+    decoder.train(False)
     for i in range(valid_size):
         with torch.no_grad():
             crumpled, smooth = valid_sampler.next()
             crumpled = torch.as_tensor(crumpled, device=device, dtype = torch.float32)
             smooth = torch.as_tensor(smooth, device = device, dtype = torch.float32)
-            encoding, activations = encoder(crumpled)
-            proposed_smooth = decoder(encoding, activations)
+            encoding, _ = encoder(crumpled)
+            proposed_smooth = decoder(encoding, None)
             loss_value += loss(smooth, proposed_smooth)
 
             hist, value = generate_mutual_information(to_numpy(smooth), to_numpy(proposed_smooth), hist = True)
@@ -74,31 +80,25 @@ def test_evaluate(encoder, decoder, device, step, save = True):
             MI_low += generate_mutual_information(to_numpy(smooth), to_numpy(crumpled))
             if i == random_selection:
                 visualize(to_numpy(crumpled[0]), to_numpy(smooth[0]), to_numpy(proposed_smooth[0]), hist_log, save = save, step = step, visible = True)
-    writer.add_scalar("Loss/valid", loss_value, step)
-    writer.add_scalar("Loss/valid_MI", MI_value, step)
+    if writer is not None:
+        writer.add_scalar("Loss/valid", loss_value, step)
+        writer.add_scalar("Loss/valid_MI", MI_value, step)
+    if csv_writer is not None:
+        csv_writer.writerow([step, MI_value, loss_value.item()])
+
     print(f"Mutual information value (higher better): {MI_value}, which is upper bounded by {MI_base} and lower bounded by {MI_low}")
     print(f"validation loss: {loss_value.item()} (for scale: {loss_value.item() / (valid_size)}")
-    csv_valid_writer.writerow([step, MI_value, loss_value.item()])
 
+    encoder.train(True)
+    decoder.train(True)
 
 if __name__ == "__main__":
-    #TODO: missing augmentations, weird structure, etc
-    #TODO: these are the parameters you can modify
-    experiment = "simple_constraint"
-    load_model = False
+    experiment = "autoencoder_baseline"
+    load_model = True
 
-    num_training_steps = 10000
-    path = f"G:\\Desktop\\Working Repository\\CRUMPL\\experiments\\{experiment}"
-
-    writer = SummaryWriter(path)  # you can specify logging directory
-
-    valid_size = 128
-    batch_size = 32
-    valid, train = random_split(sampler_dataset, [valid_size, 5000 - valid_size])
-    train_generator = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=0)
-    valid_generator = DataLoader(valid, batch_size=1, shuffle=False, num_workers=0)
-
-
+    num_training_steps = 50000
+    path = os.getcwd() + f"/experiments/{experiment}"
+    print(f"Experiment path: {path}")
 
     encoder, decoder = make_generator()
     print("done generating and loading models")
@@ -106,20 +106,26 @@ if __name__ == "__main__":
         print("cuda available!")
         device = "cuda"
         encoder = encoder.cuda()
-        # decoder = decoder.cuda()
+        decoder = decoder.cuda()
     else:
         device = "cpu"
 
-    # if load_model:
-    #     checkpoint = 100000
-    #     encoder.load_state_dict(torch.load(f'{path}/model_weights_encoder_{checkpoint}.pth'))
-    #     # decoder.load_state_dict(torch.load(f'{path}/model_weights_decoder_{checkpoint}.pth'))
-    #     # test_evaluate(encoder, decoder, device, step = "TEST", save = True)
-    #     quit()
+    if load_model:
+        checkpoint = 50000
+        encoder.load_state_dict(torch.load(f'{path}/model_weights_encoder_{checkpoint}.pth'))
+        decoder.load_state_dict(torch.load(f'{path}/model_weights_decoder_{checkpoint}.pth'))
+        def wrapper_uncrumpler(img):
+            embedding, activations = encoder.forward(img)
+            predicted_smooth = decoder(embedding, activations)
+            return predicted_smooth
+        test_evaluate(encoder, decoder, device, step = "TEST", save = True)
+        run_through_model(wrapper_uncrumpler, "data/crumple_test/", f"{path}/arbitrary_eval/", 128, device)
+        quit()
 
+    writer = SummaryWriter(path)  # you can specify logging directory
     torch.autograd.set_detect_anomaly(True)
     encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=1e-3)
-    # decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=1e-3)
+    decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=1e-3)
     loss = nn.MSELoss()
 
     soft_make_dir(path)
@@ -134,43 +140,35 @@ if __name__ == "__main__":
     norm_mult = 1e-7
     train_sampler = iter(train_generator)
     for i in range(num_training_steps + 1):
-        if i % 151 == 0:
+        if i % 1527 == 0:
             train_sampler = iter(train_generator)
 
         if i % 200 == 0:
             writer.flush()
             print("eval time!")
-            torch.save(encoder.state_dict(), f"model_weights_encoder_{i}.pth")  # saves everything from the state dictionary
-            # torch.save(decoder.state_dict(), f"model_weights_decoder_{i}.pth")  # saves everything from the state dictionary
-            test_evaluate(encoder, decoder, device, step = i, save = True)
+            test_evaluate(encoder, decoder, device, step = i, writer = writer, csv_writer = csv_valid_writer, save = True)
+        if i % 2500 == 0:
+            torch.save(encoder.state_dict(),
+                       f"model_weights_encoder_{i}.pth")  # saves everything from the state dictionary
+            torch.save(decoder.state_dict(),
+                       f"model_weights_decoder_{i}.pth")  # saves everything from the state dictionary
         beg = time.time()
-        left, right, modes = train_sampler.next()
-        left = to_tensor(left, device)
-        right = to_tensor(right, device)
-        modes = to_tensor(modes, device)
-
-        embedding_left, activations = encoder.forward(left)
-        embedding_right, activations = encoder.forward(right)
-
-        # print(torch.cuda.memory_allocated() / torch.cuda.max_memory_allocated())
-        embedding_left_flattened = embedding_left.view(batch_size, 1, -1)
-        embedding_right_flattened = torch.transpose(embedding_right.view(batch_size, 1, -1), 1, 2)
-        sum_dot = torch.squeeze(torch.bmm(embedding_left_flattened, embedding_right_flattened))
-        normed_sum_dot = sum_dot / (torch.norm(embedding_left_flattened) * torch.norm(embedding_right_flattened))
-        sum_dot = sum_dot * (-1 * modes) #we negate the negative samples. We want negative samples to be hegative, so we should negate it again
-        encoding_loss = torch.sum(sum_dot / batch_size)
+        crumpled, smooth = train_sampler.next()
+        crumpled = torch.as_tensor(crumpled, device=device, dtype = torch.float32)
+        smooth = torch.as_tensor(smooth, device = device, dtype = torch.float32)
+        embedding, activations = encoder.forward(crumpled) # sanity check: can we recreate? #TODO: this should be crumpled
+        predicted_smooth = decoder(embedding, activations)
+        encoding_loss = loss(smooth, predicted_smooth) #+ norm_mult * torch.sum(torch.abs(out))
 
         if i % 25 == 0:
-            print(i, " ", to_numpy(encoding_loss))
+            print(i, " ", encoding_loss.cpu().detach().numpy())
 
         encoder_optimizer.zero_grad()
-        # decoder_optimizer.zero_grad()
+        decoder_optimizer.zero_grad()
         encoding_loss.backward()
         encoder_optimizer.step()
-        # decoder_optimizer.step()
+        decoder_optimizer.step()
         csv_train_writer.writerow([i, encoding_loss])
         writer.add_scalar("Loss/train_loss", encoding_loss, i)
         # print(time.time() - beg)
-
-        # TODO: IMPLEMENT SIMCLR LOSS ON FEATUES
     writer.close()

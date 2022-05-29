@@ -1,8 +1,6 @@
-import torch
 import pickle
 import csv
 
-from pipeline_whole import CrumpleLibrary
 import torch.optim as optim
 import torch.nn as nn
 
@@ -11,7 +9,7 @@ from torch.utils.data import random_split
 from torch.utils.tensorboard import SummaryWriter
 
 from cyclegan.models import Composite
-from EncoderDecoder import PixGenerator, PixDiscriminator
+from UNet.Models import PixGenerator, PixDiscriminator
 
 from utils.utils import *
 

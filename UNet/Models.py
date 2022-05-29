@@ -173,7 +173,7 @@ class Decoder(nn.Module):
         for module in self.convs:
             x = module(x)
             x = nn.functional.leaky_relu(x)
-            if len(activations) > 0: #passthrough connections
+            if activations is not None and len(activations) > 0: #passthrough connections
                 x = torch.cat((x, activations.pop()), dim = 1)
                 # x = x + activations.pop()
         return x

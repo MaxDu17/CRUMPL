@@ -1,17 +1,10 @@
 import pickle
-import numpy as np
-import random
-import torch
 from torch import nn
-import os
 import time
-from shutil import copyfile
-import matplotlib.pyplot as plt
-from EncoderDecoder import Discriminator
+from UNet.Models import Discriminator
 import csv
-from pipeline_whole import CrumpleLibrary
 from torch.utils.tensorboard import SummaryWriter
-sampler_dataset = pickle.load(open("frozen_datasets/dataset_10000_small.pkl", "rb"))
+sampler_dataset = pickle.load(open("../frozen_datasets/dataset_10000_small.pkl", "rb"))
 sampler_dataset.set_mode("classifier_sample")
 print("done loading data")
 from utils.utils import *

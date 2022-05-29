@@ -1,12 +1,9 @@
 import pickle
 from torch import nn
-import time
-import matplotlib.pyplot as plt
-from EncoderDecoder import PixGenerator, PixDiscriminator
+from UNet.Models import PixGenerator, PixDiscriminator
 import csv
 from torch.utils.tensorboard import SummaryWriter
 from utils.utils import *
-from torchsummary import summary
 
 sampler_dataset = pickle.load(open("frozen_datasets/dataset_49000_small.pkl", "rb"))
 sampler_dataset.set_mode("single_sample")

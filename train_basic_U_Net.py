@@ -1,8 +1,7 @@
 import pickle
 from torch import nn
 import time
-import matplotlib.pyplot as plt
-from EncoderDecoder import Encoder, Decoder
+from UNet.Models import Encoder, Decoder
 import csv
 from torch.utils.tensorboard import SummaryWriter
 from utils.utils import *
