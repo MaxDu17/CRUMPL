@@ -2,9 +2,11 @@ import numpy as np
 import torch
 import os
 from matplotlib import pyplot as plt
+import imageio
+import cv2
 
 def generate_plot(ncols):
-    fig, ax_tuple = plt.subplots(ncols=4)
+    fig, ax_tuple = plt.subplots(ncols=ncols)
     plt.ion()  # needed to prevent show() from blocking
     return (fig, ax_tuple)
 
@@ -29,6 +31,7 @@ def visualize(axis_objects, img_list, img_names, save = False, step = 'no-step',
 
 
 
+
 def soft_make_dir(path):
     try:
         os.mkdir(path)
@@ -38,9 +41,27 @@ def soft_make_dir(path):
 def to_numpy(tensor):
     return tensor.detach().cpu().numpy()
 
-def to_tensor(arr, device):
-    return torch.as_tensor(arr, device=device, dtype=torch.float32)
+def to_tensor(arr, device, type = torch.float32):
+    return torch.as_tensor(arr, device=device, dtype=type)
 
+def run_through_model(uncrumpler, img_dir, save_dir, w_h, device):
+    soft_make_dir(save_dir)
+
+    file_list = sorted(os.listdir(img_dir))
+    for i in range(len(file_list)):
+        print(file_list[i])
+        crumpled = imageio.imread(img_dir + file_list[i])
+        crumpled = cv2.resize(crumpled, (w_h, w_h))
+        cleaned = np.transpose(np.array(crumpled / 255), axes=(2, 0, 1))
+
+        cleaned = to_tensor(cleaned, device = device)
+        cleaned = torch.unsqueeze(cleaned, dim = 0)
+        proposed_smooth = to_numpy(uncrumpler(cleaned)[0])
+        proposed_smooth_normalized = np.clip(proposed_smooth, 0, 1)
+        # encoding, activations = encoder(cleaned)
+        # proposed_smooth = to_numpy(decoder(encoding, activations)[0])
+        # proposed_smooth_normalized = ((proposed_smooth - np.min(proposed_smooth)) / (np.max(proposed_smooth) - np.min(proposed_smooth)))
+        plt.imsave(save_dir + file_list[i].split(".")[0] + "_uncrumpled.png", np.transpose(proposed_smooth_normalized, (1, 2, 0)))
 
 def generate_mutual_information(img1, img2, hist = False):
     hist_2d, x_edges, y_edges = np.histogram2d(img1.ravel(), img2.ravel(), bins = 20)
