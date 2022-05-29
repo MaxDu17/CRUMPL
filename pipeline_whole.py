@@ -7,6 +7,7 @@ import cv2
 
 class CrumpleLibrary(IterableDataset):
     def __init__(self, base_directory, number_images = 1000):
+        super(CrumpleLibrary).__init__()
         self.base_directory = base_directory
         file_list = sorted(os.listdir(self.base_directory))
 

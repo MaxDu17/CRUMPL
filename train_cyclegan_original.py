@@ -1,6 +1,7 @@
 import torch
 import pickle
 import csv
+from tqdm import tqdm
 
 from pipeline_whole import CrumpleLibrary
 import torch.optim as optim
@@ -11,8 +12,7 @@ from torch.utils.data import random_split
 from torch.utils.tensorboard import SummaryWriter
 
 from cyclegan.models import Generator, Discriminator, Composite
-# from cyclegan.models import Composite
-# from EncoderDecoder import PixGenerator, PixDiscriminator
+import imagenet_inception_eval as inception_loss
 
 from utils.utils import *
 
@@ -67,20 +67,20 @@ def generate_fake_samples(gen, x):
         return gen(x)
 
 
-def test_evaluate(uncrumpler, crumpler, device, step, writer = None, csv_writer = None, save = True):
+def test_evaluate(uncrumpler, crumpler, device, sampler, step, writer = None, csv_writer = None, save = True, raw_output = None):
     loss = nn.MSELoss()
     random_selection = np.random.randint(valid_size)
     loss_value = 0
     MI_value = 0
     MI_base = 0
     MI_low = 0
+    i_l = 0
     generated_library.set_mode('single_sample')
-    valid_sampler = iter(valid_generator)
+    valid_sampler = iter(sampler)
     crumpler.train(False)
     uncrumpler.train(False)
-    for i in range(valid_size):
+    for i, (crumpled, smooth) in tqdm(enumerate(valid_sampler)):
         with torch.no_grad():
-            crumpled, smooth = valid_sampler.next()
             crumpled = torch.as_tensor(crumpled, device=device, dtype = torch.float32)
             smooth = torch.as_tensor(smooth, device = device, dtype = torch.float32)
             proposed_smooth = uncrumpler(crumpled)
@@ -92,18 +92,25 @@ def test_evaluate(uncrumpler, crumpler, device, step, writer = None, csv_writer 
             non_zeros = hist != 0
             hist_log[non_zeros] = np.log(hist[non_zeros])
 
+            i_l += inception_loss.loss_on_batch(smooth, proposed_smooth)
+
+            if raw_output is not None:
+                proposed_smooth_normalized = np.clip(to_numpy(proposed_smooth[0]), 0, 1)
+                plt.imsave(raw_output + str(i) + ".png", np.transpose(proposed_smooth_normalized, (1, 2, 0)))
+
             MI_value += value
             MI_base += generate_mutual_information(to_numpy(smooth), to_numpy(smooth))
             MI_low += generate_mutual_information(to_numpy(smooth), to_numpy(crumpled))
             if i == random_selection:
-                visualize(ax_objects, [to_numpy(crumpled[0]), to_numpy(smooth[0]), to_numpy(recrumpled[0]), to_numpy(proposed_smooth[0]), hist_log],
+                visualize(ax_objects, [to_numpy(crumpled[0]), to_numpy(smooth[0]), to_numpy(proposed_smooth[0]), to_numpy(recrumpled[0]), hist_log],
                           ["crumpled", "smooth", "output", "recrumpled", "Mutual Info"], save = save, step = step, visible = True)
 
     if writer is not None:
         writer.add_scalar("Loss/valid", loss_value, step)
         writer.add_scalar("Loss/valid_MI", MI_value, step)
+        writer.add_scalar("Loss/valid_Inception", i_l, step)
     if csv_writer is not None:
-        csv_writer.writerow([step, MI_value, loss_value.item()])
+        csv_writer.writerow([step, MI_value, loss_value.item(), i_l.item()])
 
     print(f"Mutual information value (higher better): {MI_value}, which is upper bounded by {MI_base} and lower bounded by {MI_low}")
     print(f"validation loss: {loss_value.item()} (for scale: {loss_value.item() / (valid_size)}")
@@ -112,12 +119,6 @@ def test_evaluate(uncrumpler, crumpler, device, step, writer = None, csv_writer 
     generated_library.set_mode('single_unpaired_sample')
 
 def train_cyclegan(n_epochs=1):
-    # gen_c_to_uc = PixGenerator(INPUT_SHAPE)
-    # gen_uc_to_c = PixGenerator(INPUT_SHAPE)
-    #
-    # disc_c = PixDiscriminator(INPUT_SHAPE)
-    # disc_uc = PixDiscriminator(INPUT_SHAPE)
-
     gen_c_to_uc = Generator(input_shape=INPUT_SHAPE)
     gen_uc_to_c = Generator(input_shape=INPUT_SHAPE)
 
@@ -144,7 +145,7 @@ def train_cyclegan(n_epochs=1):
         train_sampler = iter(train_generator)
         for i, (x_real_c, x_real_uc) in enumerate(train_sampler): #todo: replace with random sampling
             if i % 100 == 0:
-                test_evaluate(gen_c_to_uc, gen_uc_to_c, device, step = f"{epoch}_{i}", writer = writer, csv_writer = csv_valid_writer)
+                test_evaluate(gen_c_to_uc, gen_uc_to_c, device, valid_generator, step = f"{epoch}_{i}", writer = writer, csv_writer = csv_valid_writer)
 
             if i % 2500 == 0:
                 print("saving!")
@@ -185,8 +186,8 @@ def train_cyclegan(n_epochs=1):
 
 
 if __name__ == '__main__':
-    experiment = "cyclegan"
-    load_model = False
+    experiment = "cyclegan_basic"
+    load_model = True
 
     path = os.getcwd() + f"/experiments/{experiment}"
     print(f"Experiment path: {path}")
@@ -201,6 +202,12 @@ if __name__ == '__main__':
 
     if load_model:
         checkpoint = "4_5000"
+        test_library = pickle.load(open("../../frozen_datasets/dataset_49000_TEST.pkl", "rb"))
+        test_library.set_mode('single_sample')
+        test, _ = random_split(test_library, [1000, 0])
+        print("Done loading test data")
+        test_generator = DataLoader(test, batch_size=1, shuffle=False, num_workers=0)
+        test_generator = iter(test_generator)
         gen_c_to_uc = Generator(input_shape=INPUT_SHAPE)
         gen_uc_to_c = Generator(input_shape=INPUT_SHAPE)
         disc_c = Discriminator(input_shape=INPUT_SHAPE)
@@ -210,8 +217,14 @@ if __name__ == '__main__':
         comp_uc_to_c = Composite(gen_uc_to_c, disc_c, gen_c_to_uc).to(device)
         comp_c_to_uc.load_state_dict(torch.load(f'{path}/comp_c_to_uc_{checkpoint}.pth'))
         comp_uc_to_c.load_state_dict(torch.load(f'{path}/comp_c_to_uc_{checkpoint}.pth'))
-        test_evaluate(gen_c_to_uc, gen_uc_to_c, device = "cuda", step="TEST")
-        run_through_model(gen_c_to_uc, "../../data/crumple_test/", f"{path}/arbitrary_eval/", 128, device)
+
+        f = open("metrics_test.csv", "w", newline="")
+        csv_valid_writer = csv.writer(f)
+        csv_valid_writer.writerow(["step", "MI", "MSE", "Inception"])
+        test_evaluate(gen_c_to_uc, gen_uc_to_c, device, test_generator, step="TEST", csv_writer=csv_valid_writer, save=True,
+                      raw_output=f"{path}/arbitrary_eval/")
+
+        # run_through_model(gen_c_to_uc, "../../data/paired_data_TEST/", f"{path}/arbitrary_eval/", 128, device)
         quit()
 
     num_epochs = 5

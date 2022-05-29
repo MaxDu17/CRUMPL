@@ -6,6 +6,7 @@ import csv
 from torch.utils.tensorboard import SummaryWriter
 from utils.utils import *
 import imagenet_inception_eval as inception_loss
+from tqdm import tqdm
 
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
@@ -26,7 +27,7 @@ def make_generator():
     decoder = Decoder((3, 128, 128))
     return encoder, decoder
 
-def test_evaluate(encoder, decoder, device, step, writer = None, csv_writer = None, save = True):
+def test_evaluate(encoder, decoder, device, sampler, step, writer = None, csv_writer = None, save = True, raw_output = None):
     loss = nn.MSELoss()
     random_selection = np.random.randint(valid_size)
     loss_value = 0
@@ -34,17 +35,20 @@ def test_evaluate(encoder, decoder, device, step, writer = None, csv_writer = No
     MI_base = 0
     MI_low = 0
     i_l = 0
-    valid_sampler = iter(valid_generator)
+    valid_sampler = iter(sampler)
     encoder.train(False)
     decoder.train(False)
-    for i in range(valid_size):
+    for i, (crumpled, smooth) in tqdm(enumerate(valid_sampler)):
         with torch.no_grad():
-            crumpled, smooth = valid_sampler.next()
             crumpled = torch.as_tensor(crumpled, device=device, dtype = torch.float32)
             smooth = torch.as_tensor(smooth, device = device, dtype = torch.float32)
             encoding, activations = encoder(crumpled)
             proposed_smooth = decoder(encoding, activations)
             loss_value += loss(smooth, proposed_smooth)
+
+            if raw_output is not None:
+                proposed_smooth_normalized = np.clip(to_numpy(proposed_smooth[0]), 0, 1)
+                plt.imsave(raw_output + str(i) + ".png", np.transpose(proposed_smooth_normalized, (1, 2, 0)))
 
             hist, value = generate_mutual_information(to_numpy(smooth), to_numpy(proposed_smooth), hist = True)
             hist_log = np.zeros(hist.shape)
@@ -63,8 +67,9 @@ def test_evaluate(encoder, decoder, device, step, writer = None, csv_writer = No
     if writer is not None:
         writer.add_scalar("Loss/valid", loss_value, step)
         writer.add_scalar("Loss/valid_MI", MI_value, step)
+        writer.add_scalar("Loss/valid_Inception", i_l, step)
     if csv_writer is not None:
-        csv_writer.writerow([step, MI_value, loss_value.item()])
+        csv_writer.writerow([step, MI_value, loss_value.item(), i_l.item()])
     print(f"Inception Loss: {i_l}")
     print(f"Mutual information value (higher better): {MI_value}, which is upper bounded by {MI_base} and lower bounded by {MI_low}")
     print(f"validation loss: {loss_value.item()} (for scale: {loss_value.item() / (valid_size)}")
@@ -94,17 +99,29 @@ if __name__ == "__main__":
 
     if load_model:
         checkpoint = 50000
+        test_library = pickle.load(open("../../frozen_datasets/dataset_49000_TEST.pkl", "rb"))
+        test_library.set_mode('single_sample')
+        test, _ = random_split(test_library, [1000, 0])
+        print("Done loading test data")
+        test_generator = DataLoader(test, batch_size=1, shuffle=False, num_workers=0)
+        test_generator = iter(test_generator)
         encoder.load_state_dict(torch.load(f'{path}/model_weights_encoder_{checkpoint}.pth'))
         decoder.load_state_dict(torch.load(f'{path}/model_weights_decoder_{checkpoint}.pth'))
+
         def wrapper_uncrumpler(img):
             embedding, activations = encoder.forward(img)
             predicted_smooth = decoder(embedding, activations)
             return predicted_smooth
 
-        test_evaluate(encoder, decoder, device, step = "TEST", save = True)
+        f = open("metrics_test.csv", "w", newline="")
+        csv_valid_writer = csv.writer(f)
+        csv_valid_writer.writerow(["step", "MI", "MSE", "Inception"])
+        test_evaluate(encoder, decoder, device, test_generator, step="TEST", csv_writer=csv_valid_writer, save=True,
+                      raw_output=f"{path}/arbitrary_eval/")
+
         encoder.train(False)
         decoder.train(False)
-        run_through_model(wrapper_uncrumpler, "../../data/crumple_test/", f"{path}/arbitrary_eval/", 128, device)
+        # run_through_model(wrapper_uncrumpler, "../../data/crumple_TEST/", f"{path}/arbitrary_eval/", 128, device)
         quit()
 
     writer = SummaryWriter(path)  # you can specify logging directory

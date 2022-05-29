@@ -4,13 +4,14 @@ from UNet.Models import PixGenerator, PixDiscriminator
 import csv
 from torch.utils.tensorboard import SummaryWriter
 from utils.utils import *
+from tqdm import tqdm
+import imagenet_inception_eval as inception_loss
+
 
 sampler_dataset = pickle.load(open("frozen_datasets/dataset_49000_small.pkl", "rb"))
 sampler_dataset.set_mode("single_sample")
 
 print("done loading data")
-
-# TODO: add csv logging on top of tensorboard because it's not working
 
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
@@ -28,18 +29,18 @@ def make_generator():
     return generator, discriminator
 
 
-def test_evaluate(generator, device, step, writer = None, valid_writer = None, save = True):
+def test_evaluate(generator, device, sampler, step, writer = None, csv_writer = None, save = True, raw_output = None):
     loss = nn.MSELoss()
     random_selection = np.random.randint(valid_size)
     loss_value = 0
     MI_value = 0
     MI_base = 0
     MI_low = 0
-    valid_sampler = iter(valid_generator)
+    i_l = 0
+    valid_sampler = iter(sampler)
     generator.train(False)
-    for i in range(valid_size):
+    for i, (crumpled, smooth) in tqdm(enumerate(valid_sampler)):
         with torch.no_grad():
-            crumpled, smooth = valid_sampler.next()
             crumpled = torch.as_tensor(crumpled, device=device, dtype = torch.float32)
             smooth = torch.as_tensor(smooth, device = device, dtype = torch.float32)
             proposed_smooth = generator(crumpled)
@@ -50,6 +51,12 @@ def test_evaluate(generator, device, step, writer = None, valid_writer = None, s
             non_zeros = hist != 0
             hist_log[non_zeros] = np.log(hist[non_zeros])
 
+            i_l += inception_loss.loss_on_batch(smooth, proposed_smooth)
+
+            if raw_output is not None:
+                proposed_smooth_normalized = np.clip(to_numpy(proposed_smooth[0]), 0, 1)
+                plt.imsave(raw_output + str(i) + ".png", np.transpose(proposed_smooth_normalized, (1, 2, 0)))
+
             MI_value += value
             MI_base += generate_mutual_information(to_numpy(smooth), to_numpy(smooth))
             MI_low += generate_mutual_information(to_numpy(smooth), to_numpy(crumpled))
@@ -59,9 +66,11 @@ def test_evaluate(generator, device, step, writer = None, valid_writer = None, s
     if writer is not None:
         writer.add_scalar("Loss/valid", loss_value, step)
         writer.add_scalar("Loss/valid_MI", MI_value, step)
-    if valid_writer is not None:
-        valid_writer.writerow([step, MI_value, loss_value.item()])
+        writer.add_scalar("Loss/valid_Inception", i_l, step)
+    if csv_writer is not None:
+        csv_writer.writerow([step, MI_value, loss_value.item(), i_l.item()])
 
+    print(f"Inception Loss: {i_l}")
     print(f"Mutual information value (higher better): {MI_value}, which is upper bounded by {MI_base} and lower bounded by {MI_low}")
     print(f"validation loss: {loss_value.item()} (for scale: {loss_value.item() / (valid_size)}")
 
@@ -86,13 +95,12 @@ def generator_loss(logits_fake, device):
 
 if __name__ == "__main__":
     experiment = "Pix2Pix_8"
-    load_model = False
+    load_model = True
 
     num_training_steps = 50000
     path = os.getcwd() + f"/experiments/{experiment}"
     print(f"Experiment path: {path}")
-    # path = f"G:\\Desktop\\Working Repository\\CRUMPL\\experiments\\{experiment}"
-    writer = SummaryWriter(path)  # you can specify logging directory
+
     soft_make_dir(path)
     os.chdir(path)
 
@@ -109,13 +117,26 @@ if __name__ == "__main__":
         device = "cpu"
 
 
-
     if load_model:
         checkpoint = 50000
+        test_library = pickle.load(open("../../frozen_datasets/dataset_49000_TEST.pkl", "rb"))
+        test_library.set_mode('single_sample')
+        test, _ = random_split(test_library, [1000, 0])
+        print("Done loading test data")
+        test_generator = DataLoader(test, batch_size=1, shuffle=False, num_workers=0)
+        test_generator = iter(test_generator)
         generator.load_state_dict(torch.load(f"{path}/model_weights_generator_{checkpoint}.pth"))
-        test_evaluate(generator, device, step = "TEST", save = True)
-        run_through_model(generator, "../../data/crumple_test/", f"{path}/arbitrary_eval/", 128, device)
+
+        f = open("metrics_test.csv", "w", newline="")
+        csv_valid_writer = csv.writer(f)
+        csv_valid_writer.writerow(["step", "MI", "MSE", "Inception"])
+        test_evaluate(generator, device, test_generator, step="TEST", csv_writer=csv_valid_writer, save=True,
+                      raw_output=f"{path}/arbitrary_eval/")
+
+        # run_through_model(generator, "../../data/paired_data_TEST/", f"{path}/arbitrary_eval/", 128, device)
         quit()
+
+    writer = SummaryWriter(path)  # you can specify logging directory
 
     torch.autograd.set_detect_anomaly(True)
     generator_optimizer = torch.optim.Adam(generator.parameters(), lr=2e-4, betas=(0.5,0.999))
@@ -140,7 +161,7 @@ if __name__ == "__main__":
         if i % 500 == 0:
             writer.flush()
             print("eval time!")
-            test_evaluate(generator, device, step = i, writer = writer, valid_writer = csv_valid_writer, save = True)
+            test_evaluate(generator, device, valid_generator, step = i, writer = writer, csv_writer = csv_valid_writer, save = True)
         if i % 2500 == 0:
             torch.save(generator.state_dict(),
                        f"model_weights_generator_{i}.pth")  # saves everything from the state dictionary
