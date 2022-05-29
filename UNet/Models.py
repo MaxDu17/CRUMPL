@@ -176,6 +176,8 @@ class Decoder(nn.Module):
             if activations is not None and len(activations) > 0: #passthrough connections
                 x = torch.cat((x, activations.pop()), dim = 1)
                 # x = x + activations.pop()
+            elif activations is not None:
+                x = torch.cat((x, x), dim=1) #ablation: don't use u-net
         return x
 
 

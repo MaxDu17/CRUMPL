@@ -185,10 +185,11 @@ def train_cyclegan(n_epochs=1):
 
 
 if __name__ == '__main__':
-    experiment = "U_Net_cyclegan"
+    experiment = "cyclegan"
     load_model = False
 
-    path = f"G:\\Desktop\\Working Repository\\CRUMPL\\experiments\\{experiment}"
+    path = os.getcwd() + f"/experiments/{experiment}"
+    print(f"Experiment path: {path}")
     soft_make_dir(path)
     os.chdir(path)
 
