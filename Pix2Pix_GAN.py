@@ -92,10 +92,13 @@ if __name__ == "__main__":
     load_model = False
 
     num_training_steps = 50000
-    path = f"G:\\Desktop\\Working Repository\\CRUMPL\\experiments\\{experiment}"
+    path = os.getcwd() + f"\\experiments\\{experiment}"
+    print(f"Experiment path: {path}")
+    # path = f"G:\\Desktop\\Working Repository\\CRUMPL\\experiments\\{experiment}"
     writer = SummaryWriter(path)  # you can specify logging directory
     soft_make_dir(path)
     os.chdir(path)
+
 
 
     generator, discriminator = make_generator()
