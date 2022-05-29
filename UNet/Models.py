@@ -91,7 +91,7 @@ class PixDiscriminator(nn.Module):
             self.encoder_block(64, 128),
             self.encoder_block(128, 256),
             self.encoder_block(256, 512), # 8 x 8, a 16 x 16 receptive field
-            # self.encoder_block(512, 512), # 4 x 4, a 32 x 32 receptive field
+            self.encoder_block(512, 512), # 4 x 4, a 32 x 32 receptive field
         ])
         self.out = nn.Sequential(
             nn.Conv2d(512, 1, kernel_size = 1, padding = 0, stride = 1), # a 1x1 conv

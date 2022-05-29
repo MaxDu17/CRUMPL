@@ -5,51 +5,26 @@ from UNet.Models import Encoder, Decoder
 import csv
 from torch.utils.tensorboard import SummaryWriter
 from utils.utils import *
-
-sampler_dataset = pickle.load(open("frozen_datasets/dataset_49000_small.pkl", "rb"))
-sampler_dataset.set_mode("single_sample")
-
-print("done loading data")
+import imagenet_inception_eval as inception_loss
 
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
+
+sampler_dataset = pickle.load(open("frozen_datasets/dataset_49000_small.pkl", "rb"))
+sampler_dataset.set_mode("single_sample")
+print("done loading data")
 
 valid_size = 128
 valid, train = random_split(sampler_dataset, [valid_size, 49000 - valid_size])
 train_generator = DataLoader(train, batch_size=32, shuffle=True, num_workers=0)
 valid_generator = DataLoader(valid, batch_size=1, shuffle=False, num_workers=0)
 
-
-fig, (ax1, ax2, ax3, ax4) = plt.subplots(ncols=4)
-plt.ion() #needed to prevent show() from blocking
-
-
-def visualize(crumpled, smooth, output, MI_map, save = False, step = 'no-step', visible = True):
-    ax1.clear()
-    ax2.clear()
-    ax3.clear()
-    ax4.clear()
-    ax1.set_axis_off()
-    ax2.set_axis_off()
-    ax3.set_axis_off()
-    ax1.title.set_text(f"Crumpled")
-    ax1.imshow(np.transpose(crumpled, (1, 2, 0)))
-    ax2.imshow(np.transpose(smooth, (1, 2, 0)))
-    ax2.title.set_text(f"Smooth")
-    ax3.title.set_text(f"Output")
-    ax3.imshow(np.transpose(output, (1, 2, 0)))
-    ax4.imshow(MI_map)
-    if visible:
-        plt.show()
-    plt.pause(1)
-    if save:
-        plt.savefig(f"{step}.png", bbox_inches='tight',pad_inches = 0)
+ax_objects = generate_plot(4) #creates plots that help with visualization
 
 def make_generator():
     encoder = Encoder((3, 128, 128))
     decoder = Decoder((3, 128, 128))
     return encoder, decoder
-
 
 def test_evaluate(encoder, decoder, device, step, writer = None, csv_writer = None, save = True):
     loss = nn.MSELoss()
@@ -58,6 +33,7 @@ def test_evaluate(encoder, decoder, device, step, writer = None, csv_writer = No
     MI_value = 0
     MI_base = 0
     MI_low = 0
+    i_l = 0
     valid_sampler = iter(valid_generator)
     encoder.train(False)
     decoder.train(False)
@@ -78,43 +54,33 @@ def test_evaluate(encoder, decoder, device, step, writer = None, csv_writer = No
             MI_value += value
             MI_base += generate_mutual_information(to_numpy(smooth), to_numpy(smooth))
             MI_low += generate_mutual_information(to_numpy(smooth), to_numpy(crumpled))
+
+            i_l += inception_loss.loss_on_batch(smooth, proposed_smooth)
+
             if i == random_selection:
-                visualize(to_numpy(crumpled[0]), to_numpy(smooth[0]), to_numpy(proposed_smooth[0]), hist_log, save = save, step = step, visible = True)
+                visualize(ax_objects, [to_numpy(crumpled[0]), to_numpy(smooth[0]), to_numpy(proposed_smooth[0]), hist_log],
+                          ["crumpled", "smooth", "output", "Mutual Info"], save = save, step = step, visible = True)
     if writer is not None:
         writer.add_scalar("Loss/valid", loss_value, step)
         writer.add_scalar("Loss/valid_MI", MI_value, step)
     if csv_writer is not None:
         csv_writer.writerow([step, MI_value, loss_value.item()])
-
+    print(f"Inception Loss: {i_l}")
     print(f"Mutual information value (higher better): {MI_value}, which is upper bounded by {MI_base} and lower bounded by {MI_low}")
     print(f"validation loss: {loss_value.item()} (for scale: {loss_value.item() / (valid_size)}")
 
     encoder.train(True)
     decoder.train(True)
 
-# def run_through_model(encoder, decoder, img_dir, save_dir, w_h, device):
-#     soft_make_dir(save_dir)
-#
-#     file_list = sorted(os.listdir(img_dir))
-#     for i in range(len(file_list)):
-#         print(file_list[i])
-#         crumpled = imageio.imread(img_dir + file_list[i])
-#         crumpled = cv2.resize(crumpled, (w_h, w_h))
-#         cleaned = np.transpose(np.array(crumpled / 255), axes=(2, 0, 1))
-#
-#         cleaned = to_tensor(cleaned, device = device)
-#         cleaned = torch.unsqueeze(cleaned, dim = 0)
-#         encoding, activations = encoder(cleaned)
-#         proposed_smooth = to_numpy(decoder(encoding, activations)[0])
-#         proposed_smooth_normalized = ((proposed_smooth - np.min(proposed_smooth)) / (np.max(proposed_smooth) - np.min(proposed_smooth)))
-#         plt.imsave(save_dir + file_list[i].split(".")[0] + "_uncrumpled.png", np.transpose(proposed_smooth_normalized, (1, 2, 0)))
-
 if __name__ == "__main__":
-    experiment = "unet_l1_loss"
+    experiment = "simple_unet_l1_loss"
     load_model = True
 
     num_training_steps = 50000
-    path = f"G:\\Desktop\\Working Repository\\CRUMPL\\experiments\\{experiment}"
+    path = os.getcwd() + f"/experiments/{experiment}"
+    print(f"Experiment path: {path}")
+    soft_make_dir(path)
+    os.chdir(path)
 
     encoder, decoder = make_generator()
     print("done generating and loading models")
@@ -134,8 +100,11 @@ if __name__ == "__main__":
             embedding, activations = encoder.forward(img)
             predicted_smooth = decoder(embedding, activations)
             return predicted_smooth
+
         test_evaluate(encoder, decoder, device, step = "TEST", save = True)
-        run_through_model(wrapper_uncrumpler, "data/crumple_test/", f"{path}/arbitrary_eval/", 128, device)
+        encoder.train(False)
+        decoder.train(False)
+        run_through_model(wrapper_uncrumpler, "../../data/crumple_test/", f"{path}/arbitrary_eval/", 128, device)
         quit()
 
     writer = SummaryWriter(path)  # you can specify logging directory
@@ -144,8 +113,7 @@ if __name__ == "__main__":
     decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=1e-3)
     loss = nn.L1Loss()
 
-    soft_make_dir(path)
-    os.chdir(path)
+
     f = open("metrics_train.csv", "w", newline="")
     csv_train_writer = csv.writer(f)
     csv_train_writer.writerow(["step", "loss"])
