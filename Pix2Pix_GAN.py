@@ -88,7 +88,7 @@ def generator_loss(logits_fake, device):
     return real_score
 
 if __name__ == "__main__":
-    experiment = "U_netPix_structure"
+    experiment = "Pix2Pix_8"
     load_model = False
 
     num_training_steps = 50000
@@ -164,11 +164,8 @@ if __name__ == "__main__":
         generator_optimizer.zero_grad()
         predicted_smooth = generator.forward(crumpled) # detach because we don't care about it in generator
         fake_logits = discriminator(torch.cat([predicted_smooth, crumpled], dim = 1))
-        # g_loss = generator_loss(fake_logits, device) + 100 * loss(smooth, predicted_smooth)
+        g_loss = generator_loss(fake_logits, device) + 100 * loss(smooth, predicted_smooth)
 
-        # TODO: ABLATION CHANGE THIS BACK
-        g_loss = 100 * loss(smooth, predicted_smooth)
-        # g_loss = loss(smooth, predicted_smooth)
         g_loss.backward()
         generator_optimizer.step()
 

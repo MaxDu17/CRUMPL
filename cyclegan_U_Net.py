@@ -194,10 +194,10 @@ if __name__ == '__main__':
 
     if load_model:
         checkpoint = "4_5000"
-        gen_c_to_uc = Generator(input_shape=INPUT_SHAPE)
-        gen_uc_to_c = Generator(input_shape=INPUT_SHAPE)
-        disc_c = Discriminator(input_shape=INPUT_SHAPE)
-        disc_uc = Discriminator(input_shape=INPUT_SHAPE)
+        gen_c_to_uc = PixGenerator(INPUT_SHAPE)
+        gen_uc_to_c = PixGenerator(INPUT_SHAPE)
+        disc_c = PixDiscriminator(INPUT_SHAPE)
+        disc_uc = PixDiscriminator(INPUT_SHAPE)
 
         comp_c_to_uc = Composite(gen_c_to_uc, disc_uc, gen_uc_to_c).to(device)
         comp_uc_to_c = Composite(gen_uc_to_c, disc_c, gen_c_to_uc).to(device)
