@@ -2,7 +2,9 @@ import pickle
 from torch import nn
 import time
 import matplotlib.pyplot as plt
-from EncoderDecoder import Encoder, Decoder, Discriminator
+# from EncoderDecoder import Encoder, Decoder, Discriminator
+
+from cyclegan.models import Generator, Discriminator
 import csv
 from torch.utils.tensorboard import SummaryWriter
 from utils.utils import *
@@ -20,19 +22,18 @@ from torch.utils.data import random_split
 
 valid_size = 128
 valid, train = random_split(sampler_dataset, [valid_size, 49000 - valid_size])
-train_generator = DataLoader(train, batch_size=32, shuffle=True, num_workers=0)
+train_generator = DataLoader(train, batch_size=8, shuffle=True, num_workers=0)
 valid_generator = DataLoader(valid, batch_size=1, shuffle=False, num_workers=0)
 
 ax_objects = generate_plot(4) #creates plots that help with visualization
 
-def make_generator():
-    encoder = Encoder((3, 128, 128))
-    decoder = Decoder((3, 128, 128))
-    discriminator = Discriminator((3, 128, 128))
-    return encoder, decoder, discriminator
+def make_models():
+    gen_c_to_uc = Generator(input_shape=(3, 128, 128))
+    disc_uc = Discriminator(input_shape=(6, 128, 128))
+    return gen_c_to_uc , disc_uc
 
 
-def test_evaluate(encoder, decoder, device, step, save = True):
+def test_evaluate(generator, device, step, save = True):
     loss = nn.MSELoss()
     random_selection = np.random.randint(valid_size)
     loss_value = 0
@@ -40,15 +41,13 @@ def test_evaluate(encoder, decoder, device, step, save = True):
     MI_base = 0
     MI_low = 0
     valid_sampler = iter(valid_generator)
-    encoder.train(False)
-    decoder.train(False)
+    generator.train(False)
     for i in range(valid_size):
         with torch.no_grad():
             crumpled, smooth = valid_sampler.next()
             crumpled = torch.as_tensor(crumpled, device=device, dtype = torch.float32)
             smooth = torch.as_tensor(smooth, device = device, dtype = torch.float32)
-            encoding, activations = encoder(crumpled)
-            proposed_smooth = decoder(encoding, activations)
+            proposed_smooth = generator(crumpled)
             loss_value += loss(smooth, proposed_smooth)
 
             hist, value = generate_mutual_information(to_numpy(smooth), to_numpy(proposed_smooth), hist = True)
@@ -68,27 +67,26 @@ def test_evaluate(encoder, decoder, device, step, save = True):
     print(f"Mutual information value (higher better): {MI_value}, which is upper bounded by {MI_base} and lower bounded by {MI_low}")
     print(f"validation loss: {loss_value.item()} (for scale: {loss_value.item() / (valid_size)}")
     csv_valid_writer.writerow([step, MI_value, loss_value.item()])
-    encoder.train(True)
-    decoder.train(True)
+    generator.train(True)
 
 def discriminator_loss(logits_real, logits_fake, device):
     bce = nn.BCEWithLogitsLoss()
-    true_labels = torch.ones((logits_real.shape[0],1)).to(device)
-    false_labels = torch.zeros((logits_fake.shape[0],1)).to(device)
-    real_score = bce(logits_real, true_labels)
-    fake_score = bce(logits_fake, false_labels)
+    true_labels = torch.ones((logits_real.shape[0],)).to(device)
+    false_labels = torch.zeros((logits_fake.shape[0],)).to(device)
+    real_score = bce(torch.squeeze(logits_real), true_labels)
+    fake_score = bce(torch.squeeze(logits_fake), false_labels)
     loss = real_score + fake_score
     loss = loss / 2 # slows down learning, as specified in the paper
     return loss
 
 def generator_loss(logits_fake, device):
     bce = nn.BCEWithLogitsLoss()
-    true_labels = torch.ones((logits_fake.shape[0],1)).to(device)
-    real_score = bce(logits_fake, true_labels)
+    true_labels = torch.ones((logits_fake.shape[0],)).to(device)
+    real_score = bce(torch.squeeze(logits_fake), true_labels)
     return real_score
 
 if __name__ == "__main__":
-    experiment = "gan_scratch"
+    experiment = "GAN_paired_loss"
     load_model = False
 
     num_training_steps = 50000
@@ -96,13 +94,14 @@ if __name__ == "__main__":
 
     writer = SummaryWriter(path)  # you can specify logging directory
 
-    encoder, decoder, discriminator = make_generator()
+    generator, discriminator = make_models()
+
+
     print("done generating and loading models")
     if torch.cuda.is_available():
         print("cuda available!")
         device = "cuda"
-        encoder = encoder.cuda()
-        decoder = decoder.cuda()
+        generator = generator.cuda()
         discriminator = discriminator.cuda()
     else:
         device = "cpu"
@@ -115,13 +114,8 @@ if __name__ == "__main__":
     #     quit()
 
     torch.autograd.set_detect_anomaly(True)
-    encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=2e-4, betas=(0.5,0.999))
-    decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=2e-4, betas=(0.5,0.999))
+    generator_optimizer = torch.optim.Adam(generator.parameters(), lr=2e-4, betas=(0.5,0.999))
     discriminator_optimizer = torch.optim.Adam(discriminator.parameters(), lr=2e-4, betas=(0.5,0.999))
-    loss = nn.MSELoss()
-
-    # summary(discriminator, (3, 128, 128))
-    # input("here")
 
     soft_make_dir(path)
     os.chdir(path)
@@ -139,15 +133,13 @@ if __name__ == "__main__":
         if i % 1527 == 0:
             train_sampler = iter(train_generator)
 
-        if i % 500 == 0:
+        if i % 50 == 0:
             writer.flush()
             print("eval time!")
-            test_evaluate(encoder, decoder, device, step = i, save = True)
+            test_evaluate(generator, device, step = i, save = True)
         if i % 2500 == 0:
-            torch.save(encoder.state_dict(),
-                       f"model_weights_encoder_{i}.pth")  # saves everything from the state dictionary
-            torch.save(decoder.state_dict(),
-                       f"model_weights_decoder_{i}.pth")  # saves everything from the state dictionary
+            torch.save(generator.state_dict(),
+                       f"model_weights_generator_{i}.pth")  # saves everything from the state dictionary
             torch.save(discriminator.state_dict(),
                        f"model_weights_discriminator_{i}.pth")  # saves everything from the state dictionary
 
@@ -157,25 +149,21 @@ if __name__ == "__main__":
 
         # discriminator step
         discriminator_optimizer.zero_grad()
-        embedding, activations = encoder.forward(crumpled) # detach because we don't care about it in generator
-        predicted_smooth = decoder(embedding, activations).detach()
-        real_logits = discriminator(smooth, crumpled)
-        fake_logits = discriminator(predicted_smooth, crumpled)
+        predicted_smooth = generator(crumpled).detach()
+        real_logits = discriminator(torch.cat([smooth, crumpled], dim = 1))
+        fake_logits = discriminator(torch.cat([predicted_smooth, crumpled], dim = 1))
         d_loss = discriminator_loss(real_logits, fake_logits, device)
         d_loss.backward()
         discriminator_optimizer.step()
 
         # generator step
-        encoder_optimizer.zero_grad()
-        decoder_optimizer.zero_grad()
-        embedding, activations = encoder.forward(crumpled) # detach because we don't care about it in generator
-        predicted_smooth = decoder(embedding, activations)
-        fake_logits = discriminator(predicted_smooth, crumpled)
+        generator_optimizer.zero_grad()
+        predicted_smooth = generator(crumpled)
+        fake_logits = discriminator(torch.cat([predicted_smooth, crumpled], dim = 1))
         g_loss = generator_loss(fake_logits, device) + 100 * loss(smooth, predicted_smooth)
         # g_loss = loss(smooth, predicted_smooth)
         g_loss.backward()
-        encoder_optimizer.step()
-        decoder_optimizer.step()
+        generator_optimizer.step()
 
         if i % 1 == 0:
             print(i, " Discriminator ", d_loss.cpu().detach().item())
