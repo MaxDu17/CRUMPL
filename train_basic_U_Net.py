@@ -169,7 +169,7 @@ if __name__ == "__main__":
         encoding_loss.backward()
         encoder_optimizer.step()
         decoder_optimizer.step()
-        csv_train_writer.writerow([i, encoding_loss])
+        csv_train_writer.writerow([i, encoding_loss.cpu().detach().item()])
         writer.add_scalar("Loss/train_loss", encoding_loss, i)
         # print(time.time() - beg)
     writer.close()
