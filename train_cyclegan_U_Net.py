@@ -94,7 +94,7 @@ def test_evaluate(uncrumpler, crumpler, device, step, writer = None, csv_writer 
             MI_base += generate_mutual_information(to_numpy(smooth), to_numpy(smooth))
             MI_low += generate_mutual_information(to_numpy(smooth), to_numpy(crumpled))
             if i == random_selection:
-                visualize(ax_objects, [to_numpy(crumpled[0]), to_numpy(smooth[0]), to_numpy(recrumpled[0]), to_numpy(proposed_smooth[0]), hist_log],
+                visualize(ax_objects, [to_numpy(crumpled[0]), to_numpy(smooth[0]), to_numpy(proposed_smooth[0]), to_numpy(recrumpled[0]), hist_log],
                           ["crumpled", "smooth", "output", "recrumpled", "Mutual Info"], save = save, step = step, visible = True)
 
     if writer is not None:
