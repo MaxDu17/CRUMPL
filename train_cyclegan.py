@@ -19,7 +19,7 @@ generated_library = pickle.load(open("frozen_datasets/dataset_49000_small.pkl", 
 generated_library.set_mode('single_sample')
 print("Done loading data")
 
-ax_objects = generate_plot(4) #creates plots that help with visualization
+ax_objects = generate_plot(5) #creates plots that help with visualization
 
 valid_size = 128
 batch_size = 8
@@ -37,10 +37,10 @@ b_loss = nn.L1Loss()
 def train_generator_model(generator, optimizer, x, y):
     optimizer.zero_grad()
     output_d, output_id, output_f, output_b = generator(*x)
-    loss = d_loss(output_d, y[0]) \
-           + 5 * id_loss(output_id, y[1]) \
-           + 10 * f_loss(output_f, y[2]) \
-           + 10 * b_loss(output_b, y[3])
+    loss = d_loss(torch.squeeze(output_d), y[0]) \
+           + 5 * id_loss(torch.squeeze(output_id), y[1]) \
+           + 10 * f_loss(torch.squeeze(output_f), y[2]) \
+           + 10 * b_loss(torch.squeeze(output_b), y[3])
     loss.backward()
     optimizer.step()
 
@@ -50,7 +50,7 @@ def train_generator_model(generator, optimizer, x, y):
 def train_discriminator_model(discriminator, optimizer, x, y):
     optimizer.zero_grad()
     output_d = discriminator(x)
-    loss = 0.5 * d_loss(output_d, y)
+    loss = 0.5 * d_loss(torch.squeeze(output_d), y)
     loss.backward()
     optimizer.step()
 
@@ -62,7 +62,7 @@ def generate_fake_samples(gen, x):
         return gen(x)
 
 
-def test_evaluate(uncrumpler, device, step, save = True):
+def test_evaluate(uncrumpler, crumpler, device, step, writer = None, csv_writer = None, save = True):
     loss = nn.MSELoss()
     random_selection = np.random.randint(valid_size)
     loss_value = 0
@@ -70,6 +70,7 @@ def test_evaluate(uncrumpler, device, step, save = True):
     MI_base = 0
     MI_low = 0
     valid_sampler = iter(valid_generator)
+    crumpler.train(False)
     uncrumpler.train(False)
     for i in range(valid_size):
         with torch.no_grad():
@@ -77,6 +78,7 @@ def test_evaluate(uncrumpler, device, step, save = True):
             crumpled = torch.as_tensor(crumpled, device=device, dtype = torch.float32)
             smooth = torch.as_tensor(smooth, device = device, dtype = torch.float32)
             proposed_smooth = uncrumpler(crumpled)
+            recrumpled = crumpler(smooth)
             loss_value += loss(smooth, proposed_smooth)
 
             hist, value = generate_mutual_information(to_numpy(smooth), to_numpy(proposed_smooth), hist = True)
@@ -88,15 +90,19 @@ def test_evaluate(uncrumpler, device, step, save = True):
             MI_base += generate_mutual_information(to_numpy(smooth), to_numpy(smooth))
             MI_low += generate_mutual_information(to_numpy(smooth), to_numpy(crumpled))
             if i == random_selection:
-                visualize(ax_objects, [to_numpy(crumpled[0]), to_numpy(smooth[0]), to_numpy(proposed_smooth[0]), hist_log],
-                          ["crumpled", "smooth", "output", "Mutual Info"], save = save, step = step, visible = True)
+                visualize(ax_objects, [to_numpy(crumpled[0]), to_numpy(smooth[0]), to_numpy(recrumpled[0]), to_numpy(proposed_smooth[0]), hist_log],
+                          ["crumpled", "smooth", "output", "recrumpled", "Mutual Info"], save = save, step = step, visible = True)
 
-    writer.add_scalar("Loss/valid", loss_value, step)
-    writer.add_scalar("Loss/valid_MI", MI_value, step)
+    if writer is not None:
+        writer.add_scalar("Loss/valid", loss_value, step)
+        writer.add_scalar("Loss/valid_MI", MI_value, step)
+    if csv_writer is not None:
+        csv_writer.writerow([step, MI_value, loss_value.item()])
+
     print(f"Mutual information value (higher better): {MI_value}, which is upper bounded by {MI_base} and lower bounded by {MI_low}")
     print(f"validation loss: {loss_value.item()} (for scale: {loss_value.item() / (valid_size)}")
-    csv_valid_writer.writerow([step, MI_value, loss_value.item()])
     uncrumpler.train(True)
+    crumpler.train(True)
 
 def train_cyclegan(n_epochs=1):
     gen_c_to_uc = Generator(input_shape=INPUT_SHAPE)
@@ -124,8 +130,8 @@ def train_cyclegan(n_epochs=1):
     for epoch in range(n_epochs):
         train_sampler = iter(train_generator)
         for i, (x_real_c, x_real_uc) in enumerate(train_sampler):
-            if i % 50 == 0:
-                test_evaluate(gen_uc_to_c, device, str(epoch) + "_" + str(i))
+            if i % 100 == 0:
+                test_evaluate(gen_c_to_uc, gen_uc_to_c, device, step = f"{epoch}_{i}", writer = writer, csv_writer = csv_valid_writer)
 
             if i % 2500 == 0:
                 print("saving!")
@@ -133,10 +139,6 @@ def train_cyclegan(n_epochs=1):
                            f"comp_c_to_uc_{epoch}_{i}.pth")  # saves everything from the state dictionary
                 torch.save(comp_uc_to_c.state_dict(),
                            f"comp_uc_to_c_{epoch}_{i}.pth")  # saves everything from the state dictionary
-                torch.save(disc_uc.state_dict(),
-                           f"disc_uc_{epoch}_{i}.pth")  # saves everything from the state dictionary
-                torch.save(disc_c.state_dict(),
-                           f"disc_c_{epoch}_{i}.pth")  # saves everything from the state dictionary
 
             x_real_c = to_tensor(x_real_c, device)
             x_real_uc = to_tensor(x_real_uc, device)
@@ -170,18 +172,40 @@ def train_cyclegan(n_epochs=1):
 
 
 if __name__ == '__main__':
-    experiment = "cyclegan_scratch"
-    load_model = False
+    experiment = "cyclegan_first_implementation"
+    load_model = True
 
-    num_epochs = 5
     path = f"G:\\Desktop\\Working Repository\\CRUMPL\\experiments\\{experiment}"
     soft_make_dir(path)
     os.chdir(path)
 
+    if torch.cuda.is_available():
+        print("cuda available!")
+        device = "cuda"
+    else:
+        device = "cpu"
+
+    if load_model:
+        checkpoint = "4_5000"
+        gen_c_to_uc = Generator(input_shape=INPUT_SHAPE)
+        gen_uc_to_c = Generator(input_shape=INPUT_SHAPE)
+        disc_c = Discriminator(input_shape=INPUT_SHAPE)
+        disc_uc = Discriminator(input_shape=INPUT_SHAPE)
+
+        comp_c_to_uc = Composite(gen_c_to_uc, disc_uc, gen_uc_to_c).to(device)
+        comp_uc_to_c = Composite(gen_uc_to_c, disc_c, gen_c_to_uc).to(device)
+        comp_c_to_uc.load_state_dict(torch.load(f'{path}/comp_c_to_uc_{checkpoint}.pth'))
+        comp_uc_to_c.load_state_dict(torch.load(f'{path}/comp_c_to_uc_{checkpoint}.pth'))
+        test_evaluate(gen_c_to_uc, gen_uc_to_c, device = "cuda", step="TEST")
+        run_through_model(gen_c_to_uc, "../../data/crumple_test/", f"{path}/arbitrary_eval/", 128, device)
+        quit()
+
+    num_epochs = 5
+
+
     f = open("metrics_valid.csv", "w", newline="")
     csv_valid_writer = csv.writer(f)
     csv_valid_writer.writerow(["step", "MI", "MSE"])
-
     writer = SummaryWriter(path)  # you can specify logging directory
 
     train_cyclegan(num_epochs) #5 epochs is around 30k steps

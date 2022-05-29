@@ -12,8 +12,6 @@ sampler_dataset.set_mode("single_sample")
 
 print("done loading data")
 
-# TODO: add csv logging on top of tensorboard because it's not working
-
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
 
@@ -54,7 +52,7 @@ def make_generator():
     return encoder, decoder
 
 
-def test_evaluate(encoder, decoder, device, step, save = True):
+def test_evaluate(encoder, decoder, device, step, writer = None, csv_writer = None, save = True):
     loss = nn.MSELoss()
     random_selection = np.random.randint(valid_size)
     loss_value = 0
@@ -83,23 +81,41 @@ def test_evaluate(encoder, decoder, device, step, save = True):
             MI_low += generate_mutual_information(to_numpy(smooth), to_numpy(crumpled))
             if i == random_selection:
                 visualize(to_numpy(crumpled[0]), to_numpy(smooth[0]), to_numpy(proposed_smooth[0]), hist_log, save = save, step = step, visible = True)
-    writer.add_scalar("Loss/valid", loss_value, step)
-    writer.add_scalar("Loss/valid_MI", MI_value, step)
+    if writer is not None:
+        writer.add_scalar("Loss/valid", loss_value, step)
+        writer.add_scalar("Loss/valid_MI", MI_value, step)
+    if csv_writer is not None:
+        csv_writer.writerow([step, MI_value, loss_value.item()])
+
     print(f"Mutual information value (higher better): {MI_value}, which is upper bounded by {MI_base} and lower bounded by {MI_low}")
     print(f"validation loss: {loss_value.item()} (for scale: {loss_value.item() / (valid_size)}")
-    csv_valid_writer.writerow([step, MI_value, loss_value.item()])
+
     encoder.train(True)
     decoder.train(True)
 
+# def run_through_model(encoder, decoder, img_dir, save_dir, w_h, device):
+#     soft_make_dir(save_dir)
+#
+#     file_list = sorted(os.listdir(img_dir))
+#     for i in range(len(file_list)):
+#         print(file_list[i])
+#         crumpled = imageio.imread(img_dir + file_list[i])
+#         crumpled = cv2.resize(crumpled, (w_h, w_h))
+#         cleaned = np.transpose(np.array(crumpled / 255), axes=(2, 0, 1))
+#
+#         cleaned = to_tensor(cleaned, device = device)
+#         cleaned = torch.unsqueeze(cleaned, dim = 0)
+#         encoding, activations = encoder(cleaned)
+#         proposed_smooth = to_numpy(decoder(encoding, activations)[0])
+#         proposed_smooth_normalized = ((proposed_smooth - np.min(proposed_smooth)) / (np.max(proposed_smooth) - np.min(proposed_smooth)))
+#         plt.imsave(save_dir + file_list[i].split(".")[0] + "_uncrumpled.png", np.transpose(proposed_smooth_normalized, (1, 2, 0)))
 
 if __name__ == "__main__":
-    experiment = "unet_new_baseline"
-    load_model = False
+    experiment = "unet_l1_loss"
+    load_model = True
 
     num_training_steps = 50000
     path = f"G:\\Desktop\\Working Repository\\CRUMPL\\experiments\\{experiment}"
-
-    writer = SummaryWriter(path)  # you can specify logging directory
 
     encoder, decoder = make_generator()
     print("done generating and loading models")
@@ -112,16 +128,22 @@ if __name__ == "__main__":
         device = "cpu"
 
     if load_model:
-        checkpoint = 100000
+        checkpoint = 50000
         encoder.load_state_dict(torch.load(f'{path}/model_weights_encoder_{checkpoint}.pth'))
         decoder.load_state_dict(torch.load(f'{path}/model_weights_decoder_{checkpoint}.pth'))
+        def wrapper_uncrumpler(img):
+            embedding, activations = encoder.forward(img)
+            predicted_smooth = decoder(embedding, activations)
+            return predicted_smooth
         test_evaluate(encoder, decoder, device, step = "TEST", save = True)
+        run_through_model(wrapper_uncrumpler, "data/crumple_test/", f"{path}/arbitrary_eval/", 128, device)
         quit()
 
+    writer = SummaryWriter(path)  # you can specify logging directory
     torch.autograd.set_detect_anomaly(True)
     encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=1e-3)
     decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=1e-3)
-    loss = nn.MSELoss()
+    loss = nn.L1Loss()
 
     soft_make_dir(path)
     os.chdir(path)
@@ -141,7 +163,7 @@ if __name__ == "__main__":
         if i % 200 == 0:
             writer.flush()
             print("eval time!")
-            test_evaluate(encoder, decoder, device, step = i, save = True)
+            test_evaluate(encoder, decoder, device, step = i, writer = writer, csv_writer = csv_valid_writer, save = True)
         if i % 2500 == 0:
             torch.save(encoder.state_dict(),
                        f"model_weights_encoder_{i}.pth")  # saves everything from the state dictionary
