@@ -76,7 +76,7 @@ class PixGenerator(nn.Module):
 
         for module in self.decoder:
             x = module(x)
-            x = torch.concat((x, self.activations.pop()), dim = 1)
+            x = torch.cat((x, self.activations.pop()), dim = 1)
 
         return self.out(x)
 
@@ -174,7 +174,7 @@ class Decoder(nn.Module):
             x = module(x)
             x = nn.functional.leaky_relu(x)
             if len(activations) > 0: #passthrough connections
-                x = torch.concat((x, activations.pop()), dim = 1)
+                x = torch.cat((x, activations.pop()), dim = 1)
                 # x = x + activations.pop()
         return x
 
@@ -208,7 +208,7 @@ class Discriminator(nn.Module):
 
     def forward(self, a, b):
         self.activations.clear() #just in case!
-        x = torch.concat([a, b], dim = 1)
+        x = torch.cat([a, b], dim = 1)
         for module in self.convs:
             x = module(x)
             x = nn.functional.leaky_relu(x)
