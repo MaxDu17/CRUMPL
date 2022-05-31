@@ -94,8 +94,8 @@ def generator_loss(logits_fake, device):
     return real_score
 
 if __name__ == "__main__":
-    experiment = "Pix2Pix_4"
-    load_model = False
+    experiment = "U_Net_baseline"
+    load_model = True
 
     num_training_steps = 50000
     path = os.getcwd() + f"/experiments/{experiment}"

@@ -82,7 +82,7 @@ def test_evaluate(encoder, decoder, device, sampler, step, writer = None, csv_wr
 
 if __name__ == "__main__":
     experiment = "autoencoder_baseline"
-    load_model = False
+    load_model = True
 
     num_training_steps = 50000
     path = os.getcwd() + f"/experiments/{experiment}"
@@ -102,7 +102,7 @@ if __name__ == "__main__":
 
     if load_model:
         checkpoint = 50000
-        test_library = pickle.load(open("frozen_datasets/dataset_49000_TEST.pkl", "rb"))
+        test_library = pickle.load(open("../../frozen_datasets/dataset_49000_TEST.pkl", "rb"))
         test_library.set_mode('single_sample')
         test, _ = random_split(test_library, [1000, 0])
         print("Done loading test data")

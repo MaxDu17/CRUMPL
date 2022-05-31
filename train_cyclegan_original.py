@@ -30,7 +30,7 @@ valid, train = random_split(generated_library, [valid_size, len(generated_librar
 train_generator = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=0)
 valid_generator = DataLoader(valid, batch_size=1, shuffle=False, num_workers=0)
 
-d_loss = nn.MSELoss()
+d_loss = nn.BCEWithLogitsLoss()
 id_loss = nn.L1Loss()
 f_loss = nn.L1Loss()
 b_loss = nn.L1Loss()
@@ -46,6 +46,7 @@ def train_generator_model(generator, optimizer, x, y):
            + 5 * id_loss(torch.squeeze(output_id), y[1]) \
            + 10 * f_loss(torch.squeeze(output_f), y[2]) \
            + 10 * b_loss(torch.squeeze(output_b), y[3])
+
     loss.backward()
     optimizer.step()
 
@@ -186,7 +187,7 @@ def train_cyclegan(n_epochs=1):
 
 
 if __name__ == '__main__':
-    experiment = "cyclegan_basic"
+    experiment = "cyclegan_modified"
     load_model = False
 
     path = os.getcwd() + f"/experiments/{experiment}"

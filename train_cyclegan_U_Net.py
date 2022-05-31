@@ -187,8 +187,8 @@ def train_cyclegan(n_epochs=1):
 
 
 if __name__ == '__main__':
-    experiment = "U_Net_cyclegan"
-    load_model = False
+    experiment = "cyclegan_UNet"
+    load_model = True
 
     path = os.getcwd() + f"/experiments/{experiment}"
     print(f"Experiment path: {path}")

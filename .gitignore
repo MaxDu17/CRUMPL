@@ -9,5 +9,4 @@ data/*
 events.out*
 *.pkl
 *.pth
-
 *.blend1
