@@ -60,6 +60,8 @@ def test_evaluate(encoder, decoder, device, sampler, step, writer = None, csv_wr
             MI_low += generate_mutual_information(to_numpy(smooth), to_numpy(crumpled))
 
             i_l += inception_loss.loss_on_batch(smooth, proposed_smooth)
+            # if csv_writer is not None:
+            #     csv_writer.writerow([step, value, loss(smooth, proposed_smooth).item(), inception_loss.loss_on_batch(smooth, proposed_smooth).item()])
 
             if i == random_selection:
                 visualize(ax_objects, [to_numpy(crumpled[0]), to_numpy(smooth[0]), to_numpy(proposed_smooth[0]), hist_log],
@@ -68,8 +70,10 @@ def test_evaluate(encoder, decoder, device, sampler, step, writer = None, csv_wr
         writer.add_scalar("Loss/valid", loss_value, step)
         writer.add_scalar("Loss/valid_MI", MI_value, step)
         writer.add_scalar("Loss/valid_Inception", i_l, step)
+
     if csv_writer is not None:
         csv_writer.writerow([step, MI_value, loss_value.item(), i_l.item()])
+
     print(f"Inception Loss: {i_l}")
     print(f"Mutual information value (higher better): {MI_value}, which is upper bounded by {MI_base} and lower bounded by {MI_low}")
     print(f"validation loss: {loss_value.item()} (for scale: {loss_value.item() / (valid_size)}")
@@ -79,7 +83,7 @@ def test_evaluate(encoder, decoder, device, sampler, step, writer = None, csv_wr
 
 if __name__ == "__main__":
     experiment = "simpler_unet"
-    load_model = False
+    load_model = True
 
     num_training_steps = 50000
     path = os.getcwd() + f"/experiments/{experiment}"

@@ -102,6 +102,9 @@ def test_evaluate(uncrumpler, crumpler, device, sampler, step, writer = None, cs
             MI_value += value
             MI_base += generate_mutual_information(to_numpy(smooth), to_numpy(smooth))
             MI_low += generate_mutual_information(to_numpy(smooth), to_numpy(crumpled))
+
+            # if csv_writer is not None:
+            #     csv_writer.writerow([step, value, loss(smooth, proposed_smooth).item(), inception_loss.loss_on_batch(smooth, proposed_smooth).item()])
             if i == random_selection:
                 visualize(ax_objects, [to_numpy(crumpled[0]), to_numpy(smooth[0]), to_numpy(proposed_smooth[0]), to_numpy(recrumpled[0]), hist_log],
                           ["crumpled", "smooth", "output", "recrumpled", "Mutual Info"], save = save, step = step, visible = True)
@@ -187,8 +190,8 @@ def train_cyclegan(n_epochs=1):
 
 
 if __name__ == '__main__':
-    experiment = "cyclegan_modified"
-    load_model = False
+    experiment = "cyclegan_basic"
+    load_model = True
 
     path = os.getcwd() + f"/experiments/{experiment}"
     print(f"Experiment path: {path}")

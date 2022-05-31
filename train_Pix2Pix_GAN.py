@@ -63,6 +63,9 @@ def test_evaluate(generator, device, sampler, step, writer = None, csv_writer = 
             if i == random_selection:
                 visualize(ax_objects, [to_numpy(crumpled[0]), to_numpy(smooth[0]), to_numpy(proposed_smooth[0]), hist_log],
                           ["crumpled", "smooth", "output", "Mutual Info"], save = save, step = step, visible = True)
+
+            # if csv_writer is not None:
+            #     csv_writer.writerow([step, value, loss(smooth, proposed_smooth).item(), inception_loss.loss_on_batch(smooth, proposed_smooth).item()])
     if writer is not None:
         writer.add_scalar("Loss/valid", loss_value, step)
         writer.add_scalar("Loss/valid_MI", MI_value, step)
@@ -94,7 +97,7 @@ def generator_loss(logits_fake, device):
     return real_score
 
 if __name__ == "__main__":
-    experiment = "U_Net_baseline"
+    experiment = "Pix2Pix_16"
     load_model = True
 
     num_training_steps = 50000

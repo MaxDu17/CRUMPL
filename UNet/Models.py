@@ -155,29 +155,29 @@ class Decoder(nn.Module):
         self.img_C, self.img_H, self.img_W = self.input_dim
         self.activations = []
 
-        self.convs = nn.ModuleList([
-            nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2),  # pooling
-            nn.ConvTranspose2d(64, 32, kernel_size=3, padding=1, stride=1),
-            nn.ConvTranspose2d(64, 32, kernel_size=3, padding=1, stride=1),
-            nn.ConvTranspose2d(64, 16, kernel_size=2, stride=2),  # pooling
-            nn.ConvTranspose2d(32, 16, kernel_size=5, padding=2, stride=1),
-            nn.ConvTranspose2d(32, 16, kernel_size=5, padding=2, stride=1),
-            nn.ConvTranspose2d(32, 8, kernel_size=2, stride=2),  # pooling
-            nn.ConvTranspose2d(16, 8, kernel_size=7, padding=3, stride=1),
-            nn.ConvTranspose2d(16, self.img_C, kernel_size=7, padding = 3, stride=1),
-        ])
-
         # self.convs = nn.ModuleList([
         #     nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2),  # pooling
-        #     nn.ConvTranspose2d(32, 32, kernel_size=3, padding=1, stride=1),
-        #     nn.ConvTranspose2d(32, 32, kernel_size=3, padding=1, stride=1),
-        #     nn.ConvTranspose2d(32, 16, kernel_size=2, stride=2),  # pooling
-        #     nn.ConvTranspose2d(16, 16, kernel_size=5, padding=2, stride=1),
-        #     nn.ConvTranspose2d(16, 16, kernel_size=5, padding=2, stride=1),
-        #     nn.ConvTranspose2d(16, 8, kernel_size=2, stride=2),  # pooling
-        #     nn.ConvTranspose2d(8, 8, kernel_size=7, padding=3, stride=1),
-        #     nn.ConvTranspose2d(8, self.img_C, kernel_size=7, padding = 3, stride=1),
+        #     nn.ConvTranspose2d(64, 32, kernel_size=3, padding=1, stride=1),
+        #     nn.ConvTranspose2d(64, 32, kernel_size=3, padding=1, stride=1),
+        #     nn.ConvTranspose2d(64, 16, kernel_size=2, stride=2),  # pooling
+        #     nn.ConvTranspose2d(32, 16, kernel_size=5, padding=2, stride=1),
+        #     nn.ConvTranspose2d(32, 16, kernel_size=5, padding=2, stride=1),
+        #     nn.ConvTranspose2d(32, 8, kernel_size=2, stride=2),  # pooling
+        #     nn.ConvTranspose2d(16, 8, kernel_size=7, padding=3, stride=1),
+        #     nn.ConvTranspose2d(16, self.img_C, kernel_size=7, padding = 3, stride=1),
         # ])
+
+        self.convs = nn.ModuleList([
+            nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2),  # pooling
+            nn.ConvTranspose2d(32, 32, kernel_size=3, padding=1, stride=1),
+            nn.ConvTranspose2d(32, 32, kernel_size=3, padding=1, stride=1),
+            nn.ConvTranspose2d(32, 16, kernel_size=2, stride=2),  # pooling
+            nn.ConvTranspose2d(16, 16, kernel_size=5, padding=2, stride=1),
+            nn.ConvTranspose2d(16, 16, kernel_size=5, padding=2, stride=1),
+            nn.ConvTranspose2d(16, 8, kernel_size=2, stride=2),  # pooling
+            nn.ConvTranspose2d(8, 8, kernel_size=7, padding=3, stride=1),
+            nn.ConvTranspose2d(8, self.img_C, kernel_size=7, padding = 3, stride=1),
+        ])
 
     def forward(self, encoding, activations):
         x = encoding
