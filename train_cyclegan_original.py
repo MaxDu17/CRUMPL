@@ -187,7 +187,7 @@ def train_cyclegan(n_epochs=1):
 
 if __name__ == '__main__':
     experiment = "cyclegan_basic"
-    load_model = True
+    load_model = False
 
     path = os.getcwd() + f"/experiments/{experiment}"
     print(f"Experiment path: {path}")

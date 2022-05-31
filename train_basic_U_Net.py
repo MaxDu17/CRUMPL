@@ -78,8 +78,8 @@ def test_evaluate(encoder, decoder, device, sampler, step, writer = None, csv_wr
     decoder.train(True)
 
 if __name__ == "__main__":
-    experiment = "simple_unet_l1_loss"
-    load_model = True
+    experiment = "simpler_unet"
+    load_model = False
 
     num_training_steps = 50000
     path = os.getcwd() + f"/experiments/{experiment}"
@@ -147,7 +147,7 @@ if __name__ == "__main__":
         if i % 200 == 0:
             writer.flush()
             print("eval time!")
-            test_evaluate(encoder, decoder, device, step = i, writer = writer, csv_writer = csv_valid_writer, save = True)
+            test_evaluate(encoder, decoder, device, valid_generator, step = i, writer = writer, csv_writer = csv_valid_writer, save = True)
         if i % 2500 == 0:
             torch.save(encoder.state_dict(),
                        f"model_weights_encoder_{i}.pth")  # saves everything from the state dictionary
