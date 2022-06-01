@@ -87,14 +87,19 @@ class PixDiscriminator(nn.Module):
         self.img_C, self.img_H, self.img_W = self.input_dim
 
         self.encoder = nn.ModuleList([
-            self.encoder_block(self.img_C, 64, bn = False),
-            self.encoder_block(64, 128),
-            # self.encoder_block(128, 256),
-            # self.encoder_block(256, 512), # 8 x 8, a 16 x 16 receptive field
-            # self.encoder_block(512, 512), # 4 x 4, a 32 x 32 receptive field
+            # nn.Conv2d(self.img_C, 64, kernel_size = 1, padding = 0, stride = 1),
+            # nn.LeakyReLU(negative_slope = 0.2),
+            # nn.Conv2d(64, 128, kernel_size = 1, padding = 0, stride = 1),
+            # nn.BatchNorm2d(128),
+            # nn.LeakyReLU(negative_slope = 0.2)
+            self.encoder_block(self.img_C, 64, bn = False), # 4x4 field
+            self.encoder_block(64, 128), # 10 x 10 field
+            self.encoder_block(128, 256), # 22 x 22 field
+            self.encoder_block(256, 512), # 46 x 46 field
+            self.encoder_block(512, 512), # 94 x 94 field
         ])
         self.out = nn.Sequential(
-            nn.Conv2d(128, 1, kernel_size = 1, padding = 0, stride = 1), # a 1x1 conv
+            nn.Conv2d(64, 1, kernel_size = 1, padding = 0, stride = 1), # a 1x1 conv
             nn.Sigmoid()
         )
 

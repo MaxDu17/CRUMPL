@@ -97,7 +97,7 @@ def generator_loss(logits_fake, device):
     return real_score
 
 if __name__ == "__main__":
-    experiment = "Pix2Pix_32"
+    experiment = "Pix2Pix_128"
     load_model = True
 
     num_training_steps = 50000
