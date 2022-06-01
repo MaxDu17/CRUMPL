@@ -64,14 +64,14 @@ def test_evaluate(generator, device, sampler, step, writer = None, csv_writer = 
                 visualize(ax_objects, [to_numpy(crumpled[0]), to_numpy(smooth[0]), to_numpy(proposed_smooth[0]), hist_log],
                           ["crumpled", "smooth", "output", "Mutual Info"], save = save, step = step, visible = True)
 
-            # if csv_writer is not None:
-            #     csv_writer.writerow([step, value, loss(smooth, proposed_smooth).item(), inception_loss.loss_on_batch(smooth, proposed_smooth).item()])
+            if csv_writer is not None:
+                csv_writer.writerow([step, value, loss(smooth, proposed_smooth).item(), inception_loss.loss_on_batch(smooth, proposed_smooth).item()])
     if writer is not None:
         writer.add_scalar("Loss/valid", loss_value, step)
         writer.add_scalar("Loss/valid_MI", MI_value, step)
         writer.add_scalar("Loss/valid_Inception", i_l, step)
-    if csv_writer is not None:
-        csv_writer.writerow([step, MI_value, loss_value.item(), i_l.item()])
+    # if csv_writer is not None:
+    #     csv_writer.writerow([step, MI_value, loss_value.item(), i_l.item()])
 
     print(f"Inception Loss: {i_l}")
     print(f"Mutual information value (higher better): {MI_value}, which is upper bounded by {MI_base} and lower bounded by {MI_low}")
@@ -97,7 +97,7 @@ def generator_loss(logits_fake, device):
     return real_score
 
 if __name__ == "__main__":
-    experiment = "Pix2Pix_16"
+    experiment = "Pix2Pix_32"
     load_model = True
 
     num_training_steps = 50000
@@ -136,7 +136,7 @@ if __name__ == "__main__":
         test_evaluate(generator, device, test_generator, step="TEST", csv_writer=csv_valid_writer, save=True,
                       raw_output=f"{path}/arbitrary_eval/")
 
-        # run_through_model(generator, "../../data/paired_data_TEST/", f"{path}/arbitrary_eval/", 128, device)
+        run_through_model(generator, "../../data/crumple_test/", f"{path}/arbitrary_eval/", 128, device)
         quit()
 
     writer = SummaryWriter(path)  # you can specify logging directory

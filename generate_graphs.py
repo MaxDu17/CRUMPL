@@ -4,12 +4,12 @@ import os
 import numpy as np
 
 os.chdir("./experiments")
-parameter = "Inception" #MI,MSE,Inception
+parameter = "MSE" #MI,MSE,Inception
 
 values = list()
 stdev = list()
-trials = ["autoencoder_baseline", "U_Net_baseline", "Pix2Pix_4", "Pix2Pix_8", "Pix2Pix_16", "cyclegan_basic"]
-names = ["AE Baseline", "U-Net", "Pix2Pix 4", "Pix2Pix 8", "Pix2Pix 16", "CycleGAN"]
+trials = ["autoencoder_baseline", "U_Net_baseline", "Pix2Pix_4", "Pix2Pix_8", "Pix2Pix_16",  "Pix2Pix_32"]#, "cyclegan_basic"]
+names = ["AE Baseline", "U-Net", "Pix2Pix 4", "Pix2Pix 8", "Pix2Pix 16", "Pix2Pix 32"]#, "CycleGAN"]
 
 for folder in trials:
     try:

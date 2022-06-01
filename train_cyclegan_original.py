@@ -222,13 +222,13 @@ if __name__ == '__main__':
         comp_c_to_uc.load_state_dict(torch.load(f'{path}/comp_c_to_uc_{checkpoint}.pth'))
         comp_uc_to_c.load_state_dict(torch.load(f'{path}/comp_c_to_uc_{checkpoint}.pth'))
 
-        f = open("metrics_test.csv", "w", newline="")
-        csv_valid_writer = csv.writer(f)
-        csv_valid_writer.writerow(["step", "MI", "MSE", "Inception"])
-        test_evaluate(gen_c_to_uc, gen_uc_to_c, device, test_generator, step="TEST", csv_writer=csv_valid_writer, save=True,
-                      raw_output=f"{path}/arbitrary_eval/")
+        # f = open("metrics_test.csv", "w", newline="")
+        # csv_valid_writer = csv.writer(f)
+        # csv_valid_writer.writerow(["step", "MI", "MSE", "Inception"])
+        # test_evaluate(gen_c_to_uc, gen_uc_to_c, device, test_generator, step="TEST", csv_writer=csv_valid_writer, save=True,
+        #               raw_output=f"{path}/arbitrary_eval/")
 
-        # run_through_model(gen_c_to_uc, "../../data/paired_data_TEST/", f"{path}/arbitrary_eval/", 128, device)
+        run_through_model(gen_c_to_uc, "../../data/crumple_test/", f"{path}/arbitrary_eval/", 128, device)
         quit()
 
     num_epochs = 5

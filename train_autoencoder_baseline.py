@@ -114,7 +114,7 @@ if __name__ == "__main__":
         decoder.load_state_dict(torch.load(f'{path}/model_weights_decoder_{checkpoint}.pth'))
         def wrapper_uncrumpler(img):
             embedding, activations = encoder.forward(img)
-            predicted_smooth = decoder(embedding, activations)
+            predicted_smooth = decoder(embedding, None)
             return predicted_smooth
 
         f = open("metrics_test.csv", "w", newline="")
@@ -124,7 +124,7 @@ if __name__ == "__main__":
                       raw_output=f"{path}/arbitrary_eval/")
         # encoder.train(False)
         # decoder.train(False)
-        # run_through_model(wrapper_uncrumpler, "data/paired_data_TEST/", f"{path}/arbitrary_eval/", 128, device)
+        # run_through_model(wrapper_uncrumpler, "../../data/crumple_test/", f"{path}/arbitrary_eval/", 128, device)
         quit()
 
     writer = SummaryWriter(path)  # you can specify logging directory
