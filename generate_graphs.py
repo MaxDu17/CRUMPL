@@ -4,7 +4,7 @@ import os
 import numpy as np
 
 os.chdir("./experiments")
-parameter = "Inception" #MI,MSE,Inception
+parameter = "MSE" #MI,MSE,Inception
 
 values = list()
 stdev = list()
@@ -33,6 +33,8 @@ for i in range(len(values)):
 
 fig, ax = plt.subplots(figsize=(11,5))
 bar_object = ax.bar(x_data, y_data, width = 0.6)
+# bar_object1 = ax.bar(x_data - 0.15, y_data, width = 0.3)
+# bar_object2 = ax.bar(x_data + 0.15, y_data, width = 0.3)
 #this is a demonstration of the error bar feature. Feel free to remove
 error_bars = ax.errorbar(x_data, y_data, yerr = stdev, fmt = 'none', ecolor="black", capsize = 2)
 ax.set_ylabel(f"{parameter}")
@@ -44,7 +46,8 @@ for bar in bar_object:
     bar.set_color("gray")
 
 # fig.savefig("test.png")
-fig.savefig("inception.pdf") #save as pdf for paper-ready presentation
+# fig.savefig("MSE.pdf") #save as pdf for paper-ready presentation
+# fig.savefig("MSE.png") #save as pdf for paper-ready presentation
 plt.show()
 
 

@@ -24,6 +24,7 @@ for parameter, ax, name in zip(parameters, axs, parameters):
 
 # fig.savefig("test.png")
 fig.savefig("LossPlots.pdf") #save as pdf for paper-ready presentation
+fig.savefig("LossPlots.png") #save as pdf for paper-ready presentation
 plt.show()
 
 
