@@ -1,4 +1,4 @@
-# CRUMPL: (insert acronym definition here)
+# Sixteen Pixels is (Almost) All You Need: Crafting Parameterized Image Uncrumpling Models
 
 Stanford CS231n final project, Spring 2022
 
